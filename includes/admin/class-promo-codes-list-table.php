@@ -72,13 +72,14 @@ class School_Manager_Lite_Promo_Codes_List_Table extends WP_List_Table {
     public function column_default($item, $column_name) {
         switch ($column_name) {
             case 'discount':
+                $amount = isset($item->discount_amount) ? $item->discount_amount : 0;
                 // Handle missing discount_type gracefully
                 if (isset($item->discount_type) && $item->discount_type === 'percentage') {
-                    return sprintf('%s%%', number_format($item->discount_amount, 0));
+                    return sprintf('%s%%', number_format($amount, 0));
                 } else {
                     // Fallback: if WooCommerce is not active, default to currency symbol '$'
                     $currency_symbol = function_exists('get_woocommerce_currency_symbol') ? get_woocommerce_currency_symbol() : '$';
-                    return sprintf('%s%s', $currency_symbol, number_format($item->discount_amount, 2));
+                    return sprintf('%s%s', $currency_symbol, number_format($amount, 2));
                 }
             case 'uses':
                 if (isset($item->usage_limit) && $item->usage_limit > 0) {
@@ -178,7 +179,7 @@ class School_Manager_Lite_Promo_Codes_List_Table extends WP_List_Table {
      * Column status
      */
     public function column_status($item) {
-        $status = $item->status;
+        $status = isset($item->status) ? $item->status : '';
         
         $status_labels = array(
             'active'   => '<span class="status-active">' . __('Active', 'school-manager-lite') . '</span>',
@@ -194,7 +195,7 @@ class School_Manager_Lite_Promo_Codes_List_Table extends WP_List_Table {
                 $status = 'expired';
             }
             // If has usage limit and reached it
-            elseif ($item->usage_limit > 0 && $item->used_count >= $item->usage_limit) {
+            elseif (isset($item->usage_limit) && $item->usage_limit > 0 && isset($item->used_count) && $item->used_count >= $item->usage_limit) {
                 $status = 'used';
             }
             // Default to active

@@ -388,7 +388,14 @@ class School_Manager_Lite_Admin {
                     wp_die(__('Security check failed.', 'school-manager-lite'));
                 }
 
-                $result = $student_manager->delete_student($student_id);
+                // Map WP user ID to internal student table ID if necessary
+$student_row = $student_manager->get_student_by_wp_user_id($student_id);
+if ($student_row) {
+    $result = $student_manager->delete_student($student_row->id);
+} else {
+    // Fall back to assuming ID is already student table ID
+    $result = $student_manager->delete_student($student_id);
+}
                 if (is_wp_error($result)) {
                     wp_die($result->get_error_message());
                 }

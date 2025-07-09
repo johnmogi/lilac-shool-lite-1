@@ -481,27 +481,39 @@ class School_Manager_Lite_Student_Manager {
      * @return array Array of WordPress user objects
      */
     public function get_student_users($args = array()) {
+        global $wpdb;
+
         $defaults = array(
-            'search' => '',
+            'search'  => '',
             'orderby' => 'display_name',
-            'order' => 'ASC'
+            'order'   => 'ASC',
+        );
+        $args = wp_parse_args($args, $defaults);
+
+        // First fetch the list of WP user IDs that have a matching entry in the custom students table
+        $student_table = $wpdb->prefix . 'school_students';
+        $wp_user_ids   = $wpdb->get_col("SELECT wp_user_id FROM {$student_table}");
+
+        // If there are no custom student records, bail early with empty set.
+        if (empty($wp_user_ids)) {
+            return array();
+        }
+
+        // Build WP_User_Query arguments – limit the query to only those IDs we found.
+        $user_query_args = array(
+            'include'   => $wp_user_ids,
+            'orderby'   => $args['orderby'],
+            'order'     => $args['order'],
+            'role__in'  => array('student_private', 'student_school'),
+            'fields'    => 'all',
         );
 
-        $args = wp_parse_args($args, $defaults);
-        
-        // WordPress user query arguments
-        $user_query_args = array(
-            'role__in' => array('student_private','student_school'),
-            'orderby' => $args['orderby'],
-            'order' => $args['order']
-        );
-        
-        // Add search if specified
+        // Add search pattern if provided
         if (!empty($args['search'])) {
-            $user_query_args['search'] = '*' . $args['search'] . '*';
+            $user_query_args['search']         = '*' . $args['search'] . '*';
+            $user_query_args['search_columns'] = array('user_login', 'user_email', 'display_name');
         }
-        
-        // Get users
+
         $user_query = new WP_User_Query($user_query_args);
         return $user_query->get_results();
     }

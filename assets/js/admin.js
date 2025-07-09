@@ -9,7 +9,8 @@
     'use strict';
     
     // Quick Edit functionality
-    let inlineEditStudent = {
+    // Expose globally so inline scripts in list table can access it
+    window.inlineEditStudent = {
         init: function() {
             const self = this;
             
@@ -169,6 +170,8 @@
             $('#student-quick-edit .spinner').removeClass('is-active');
         }
     };
+    // Ensure legacy plugins/themes referring to global var also work
+    var inlineEditStudent = window.inlineEditStudent;
     
     // Document ready
     $(document).ready(function() {

@@ -40,8 +40,7 @@ class School_Manager_Lite_Promo_Codes_List_Table extends WP_List_Table {
         $columns = array(
             'cb'            => '<input type="checkbox" />',
             'code'          => __('Promo Code', 'school-manager-lite'),
-            'discount'      => __('Discount', 'school-manager-lite'),
-            'class'         => __('Class', 'school-manager-lite'),
+                        'class'         => __('Class', 'school-manager-lite'),
             'student'       => __('Student', 'school-manager-lite'),
             'uses'          => __('Uses', 'school-manager-lite'),
             'status'        => __('Status', 'school-manager-lite'),
@@ -58,8 +57,7 @@ class School_Manager_Lite_Promo_Codes_List_Table extends WP_List_Table {
     public function get_sortable_columns() {
         $sortable_columns = array(
             'code'         => array('code', false),
-            'discount'     => array('discount_amount', false),
-            'uses'         => array('used_count', false),
+                        'uses'         => array('used_count', false),
             'expiry'       => array('expiry_date', false),
             'date_created' => array('created_at', true) // true means it's already sorted
         );
@@ -71,17 +69,7 @@ class School_Manager_Lite_Promo_Codes_List_Table extends WP_List_Table {
      */
     public function column_default($item, $column_name) {
         switch ($column_name) {
-            case 'discount':
-                $amount = isset($item->discount_amount) ? $item->discount_amount : 0;
-                // Handle missing discount_type gracefully
-                if (isset($item->discount_type) && $item->discount_type === 'percentage') {
-                    return sprintf('%s%%', number_format($amount, 0));
-                } else {
-                    // Fallback: if WooCommerce is not active, default to currency symbol '$'
-                    $currency_symbol = function_exists('get_woocommerce_currency_symbol') ? get_woocommerce_currency_symbol() : '$';
-                    return sprintf('%s%s', $currency_symbol, number_format($amount, 2));
-                }
-            case 'uses':
+                        case 'uses':
                 if (isset($item->usage_limit) && $item->usage_limit > 0) {
                     return sprintf('%d / %d', $item->used_count, $item->usage_limit);
                 } else {

@@ -26,8 +26,6 @@
                                     <option value=""><?php _e('Select type to import', 'school-manager-lite'); ?></option>
                                     <option value="students"><?php _e('Students', 'school-manager-lite'); ?></option>
                                     <option value="teachers"><?php _e('Teachers', 'school-manager-lite'); ?></option>
-                                    <option value="classes"><?php _e('Classes', 'school-manager-lite'); ?></option>
-                                    <option value="promo-codes"><?php _e('Promo Codes', 'school-manager-lite'); ?></option>
                                 </select>
                             </td>
                         </tr>
@@ -85,28 +83,6 @@
                                     <?php _e('Export', 'school-manager-lite'); ?>
                                 </a>
                                 <a href="#" class="button button-link download-sample" data-type="teachers">
-                                    <?php _e('Sample', 'school-manager-lite'); ?>
-                                </a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><?php _e('Classes', 'school-manager-lite'); ?></td>
-                            <td>
-                                <a href="<?php echo esc_url(add_query_arg(array('page' => 'school-manager-import-export', 'export' => 'classes'), admin_url('admin.php'))); ?>" class="button button-secondary">
-                                    <?php _e('Export', 'school-manager-lite'); ?>
-                                </a>
-                                <a href="#" class="button button-link download-sample" data-type="classes">
-                                    <?php _e('Sample', 'school-manager-lite'); ?>
-                                </a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><?php _e('Promo Codes', 'school-manager-lite'); ?></td>
-                            <td>
-                                <a href="<?php echo esc_url(add_query_arg(array('page' => 'school-manager-import-export', 'export' => 'promo-codes'), admin_url('admin.php'))); ?>" class="button button-secondary">
-                                    <?php _e('Export', 'school-manager-lite'); ?>
-                                </a>
-                                <a href="#" class="button button-link download-sample" data-type="promo-codes">
                                     <?php _e('Sample', 'school-manager-lite'); ?>
                                 </a>
                             </td>

@@ -688,6 +688,16 @@ class School_Manager_Lite_Promo_Code_Manager {
         $class_manager = School_Manager_Lite_Class_Manager::instance();
         $class = $class_manager->get_class($promo->class_id);
         
+        // Enroll the student into the LearnDash course (default 898 or class-specific)
+        $ld_course_id = 898;
+        if ($class && isset($class->course_id) && $class->course_id) {
+            $ld_course_id = $class->course_id;
+        }
+        // Ensure LearnDash function exists
+        if (function_exists('ld_update_course_access') && $student_id) {
+            ld_update_course_access($student_id, $ld_course_id);
+        }
+        
         do_action('school_manager_lite_after_redeem_promo_code', $promo->id, $student_id, $class);
         
         return array(

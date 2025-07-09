@@ -108,12 +108,12 @@ class School_Manager_Lite_Shortcodes {
                 'nonce' => wp_create_nonce('school-promo-code-redemption'),
                 'redirect_url' => !empty($atts['redirect']) ? esc_url($atts['redirect']) : '',
                 'i18n' => array(
-                    'code_required' => __('Please enter your promo code.', 'school-manager-lite'),
-                    'processing' => __('Processing...', 'school-manager-lite'),
-                    'error' => __('An error occurred. Please try again.', 'school-manager-lite'),
-                    'invalid_code' => __('Invalid promo code. Please check and try again.', 'school-manager-lite'),
-                    'code_already_used' => __('This promo code has already been redeemed.', 'school-manager-lite'),
-                    'success' => __('Success! Your promo code has been redeemed.', 'school-manager-lite'),
+                    'code_required' => __('אנא הזן את קוד הקופון.', 'school-manager-lite'),
+                    'processing' => __('מטעין...', 'school-manager-lite'),
+                    'error' => __('אירעה שגיאה. נסה שוב.', 'school-manager-lite'),
+                    'invalid_code' => __('קוד לא תקין. נא לבדוק ולנסות שוב.', 'school-manager-lite'),
+                    'code_already_used' => __('קוד זה כבר נוצל.', 'school-manager-lite'),
+                    'success' => __('הצלחה! הקוד הופעל בהצלחה.', 'school-manager-lite'),
                 )
             )
         );
@@ -145,29 +145,31 @@ class School_Manager_Lite_Shortcodes {
         // Form HTML
         ?>
         <div class="<?php echo esc_attr($atts['class']); ?>">
+            <?php if (!empty($atts['title'])) : ?>
             <h3 class="school-promo-title"><?php echo esc_html($atts['title']); ?></h3>
+            <?php endif; ?>
             
             <?php echo $message; ?>
             
             <form id="school-promo-form" class="school-promo-form" method="post">
                 <div class="school-form-group">
-                    <label for="promo_code"><?php _e('Enter your promo code:', 'school-manager-lite'); ?></label>
-                    <input type="text" name="promo_code" id="promo_code" class="school-form-control" placeholder="<?php _e('Promo Code', 'school-manager-lite'); ?>" required>
+                    <label for="promo_code"><?php _e('הזן קוד קופון:', 'school-manager-lite'); ?></label>
+                    <input type="text" name="promo_code" id="promo_code" class="school-form-control" placeholder="<?php _e('קוד קופון', 'school-manager-lite'); ?>" required>
                 </div>
                 
                 <div class="school-form-group">
-                    <label for="student_name"><?php _e('Your Name:', 'school-manager-lite'); ?></label>
-                    <input type="text" name="student_name" id="student_name" class="school-form-control" placeholder="<?php _e('Full Name', 'school-manager-lite'); ?>" required>
+                    <label for="student_name"><?php _e('שם מלא:', 'school-manager-lite'); ?></label>
+                    <input type="text" name="student_name" id="student_name" class="school-form-control" placeholder="<?php _e('שם מלא', 'school-manager-lite'); ?>" required>
                 </div>
                 
                 <div class="school-form-group">
-                    <label for="student_phone"><?php _e('Your Phone Number:', 'school-manager-lite'); ?></label>
-                    <input type="text" name="student_phone" id="student_phone" class="school-form-control" placeholder="<?php _e('Phone Number (Username)', 'school-manager-lite'); ?>" required>
+                    <label for="student_phone"><?php _e('מספר טלפון:', 'school-manager-lite'); ?></label>
+                    <input type="text" name="student_phone" id="student_phone" class="school-form-control" placeholder="<?php _e('מספר טלפון (שם משתמש)', 'school-manager-lite'); ?>" required>
                 </div>
                 
                 <div class="school-form-group">
-                    <label for="student_id"><?php _e('Your ID:', 'school-manager-lite'); ?></label>
-                    <input type="text" name="student_id" id="student_id" class="school-form-control" placeholder="<?php _e('ID Number (Password)', 'school-manager-lite'); ?>" required>
+                    <label for="student_id"><?php _e('תעודת זהות:', 'school-manager-lite'); ?></label>
+                    <input type="text" name="student_id" id="student_id" class="school-form-control" placeholder="<?php _e('תעודת זהות (סיסמה)', 'school-manager-lite'); ?>" required>
                 </div>
                 
                 <div class="school-form-submit">

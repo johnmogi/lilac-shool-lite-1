@@ -85,15 +85,30 @@ class School_Manager_Lite_Import_Export {
         $students = $student_manager->get_students(array('limit' => -1));
         
         // Headers
-        fputcsv($output, array('ID', 'Name', 'Email', 'Class ID', 'Registration Date', 'Status'));
+        fputcsv($output, array('ID', 'Name', 'Email', 'Class ID', 'Course ID', 'Registration Date', 'Expiry Date', 'Status'));
         
         // Data
         foreach ($students as $student) {
             // Some rows may not have all properties set; provide sensible defaults
-            $id          = isset($student->id) ? $student->id : '';
+            $id          = '';
             $name        = isset($student->name) ? $student->name : '';
             $email       = isset($student->email) ? $student->email : '';
             $class_id    = isset($student->class_id) ? $student->class_id : '';
+            // Determine LearnDash course ID; default 898 if not found
+            $course_id   = 898;
+            if ($class_id) {
+                $class_manager = School_Manager_Lite_Class_Manager::instance();
+                $class = $class_manager->get_class($class_id);
+                if ($class && isset($class->course_id) && $class->course_id) {
+                    $course_id = $class->course_id;
+                }
+            }
+            // Expiry date: 30/06 current academic year (if already passed, use next year)
+            $current_year = date('Y');
+            $expiry_date  = $current_year . '-06-30';
+            if (strtotime($expiry_date) < time()) {
+                $expiry_date = ($current_year + 1) . '-06-30';
+            }
             $created_at  = isset($student->created_at) ? $student->created_at : '';
             $status      = isset($student->status) && $student->status ? $student->status : 'active';
 
@@ -102,7 +117,9 @@ class School_Manager_Lite_Import_Export {
                 $name,
                 $email,
                 $class_id,
+                $course_id,
                 $created_at,
+                $expiry_date,
                 $status
             ));
         }

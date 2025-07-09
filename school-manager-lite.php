@@ -21,20 +21,41 @@ define('SCHOOL_MANAGER_LITE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SCHOOL_MANAGER_LITE_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SCHOOL_MANAGER_LITE_BASENAME', plugin_basename(__FILE__));
 
+// Load translations
+function school_manager_lite_load_textdomain() {
+    load_plugin_textdomain('school-manager-lite', false, dirname(plugin_basename(__FILE__)) . '/languages/');
+}
+add_action('plugins_loaded', 'school_manager_lite_load_textdomain');
+
 // Register emergency shortcode in case class loading fails
 function school_manager_lite_emergency_shortcode($atts) {
+    // Only load translations when needed
+    if (!did_action('plugins_loaded')) {
+        school_manager_lite_load_textdomain();
+    }
+    
     return '<div class="school-manager-redemption-form">' .
-           '<h3>' . __('Redeem Promo Code', 'school-manager-lite') . '</h3>' .
+           '<h3>' . esc_html__('Redeem Promo Code', 'school-manager-lite') . '</h3>' .
            '<form method="post" class="school-redemption-form">' .
-           '<p><label for="promo_code">' . __('Enter your promo code:', 'school-manager-lite') . '</label></p>' .
+           '<p><label for="promo_code">' . esc_html__('Enter your promo code:', 'school-manager-lite') . '</label></p>' .
            '<p><input type="text" name="promo_code" id="promo_code" required /></p>' .
-           '<p><button type="submit" class="school-button">' . __('Redeem', 'school-manager-lite') . '</button></p>' .
+           '<p><button type="submit" class="school-button">' . esc_html__('Redeem', 'school-manager-lite') . '</button></p>' .
            '</form></div>';
 }
 
-// Register emergency shortcode early
-add_shortcode('school_manager_redeem', 'school_manager_lite_emergency_shortcode');
-add_shortcode('school_promo_code_redemption', 'school_manager_lite_emergency_shortcode');
+// Load translations at the right time
+add_action('plugins_loaded', function() {
+    // Register shortcodes after translations are loaded
+    add_shortcode('school_manager_redeem', 'school_manager_lite_emergency_shortcode');
+    add_shortcode('school_promo_code_redemption', 'school_manager_lite_emergency_shortcode');
+    
+    // Initialize the plugin
+    School_Manager_Lite::instance();
+});
+
+// Handle activation and deactivation
+register_activation_hook(__FILE__, 'school_manager_lite_activate');
+register_deactivation_hook(__FILE__, 'school_manager_lite_deactivate');
 
 /**
  * Class School_Manager_Lite
@@ -284,6 +305,52 @@ class School_Manager_Lite {
  */
 function School_Manager_Lite() {
     return School_Manager_Lite::instance();
+}
+
+// Include required files with class existence checks
+if (!class_exists('School_Manager_Lite_Teacher_Student_Relationships')) {
+    require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-teacher-student-relationships.php';
+}
+
+if (!class_exists('School_Manager_Lite_Teacher_Dashboard')) {
+    require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-teacher-dashboard.php';
+}
+
+if (!class_exists('School_Manager_Lite_Registration_Fallback')) {
+    require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-registration-fallback.php';
+}
+
+if (!class_exists('School_Manager_Lite_AJAX_Handlers')) {
+    require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-ajax-handlers.php';
+}
+
+// Activation hook
+register_activation_hook(__FILE__, 'school_manager_lite_activate');
+
+/**
+ * Plugin activation function
+ */
+function school_manager_lite_activate() {
+    global $wpdb;
+    
+    $charset_collate = $wpdb->get_charset_collate();
+    $table_name = $wpdb->prefix . 'school_teacher_students';
+    
+    $sql = "CREATE TABLE $table_name (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        teacher_id bigint(20) NOT NULL,
+        student_id bigint(20) NOT NULL,
+        class_id bigint(20) DEFAULT NULL,
+        date_assigned datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        UNIQUE KEY teacher_student_class (teacher_id, student_id, class_id)
+    ) $charset_collate;";
+    
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+    
+    // Add version to handle future updates
+    add_option('school_manager_lite_db_version', '1.0.0');
 }
 
 // Start the plugin

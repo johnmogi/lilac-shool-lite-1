@@ -506,63 +506,273 @@ class School_Manager_Lite_Teacher_Manager {
             return;
         }
         
-        add_menu_page(
-            __('My Classes', 'school-manager-lite'),
-            __('My Classes', 'school-manager-lite'),
+        // Remove old menu items if they exist
+        remove_menu_page('class-management');
+        remove_menu_page('school-classes');
+        
+        // Add main menu item for teachers
+        $hook = add_menu_page(
+            __('Teacher Dashboard', 'school-manager-lite'),
+            __('Teacher Dashboard', 'school-manager-lite'),
             'school_teacher',
-            'my-classes',
-            array($this, 'render_my_classes_page'),
-            'dashicons-groups',
+            'school-teacher-dashboard',
+            array($this, 'render_teacher_dashboard'),
+            'dashicons-welcome-learn-more',
             30
         );
         
+        // Add screen options for the teacher dashboard
+        add_action("load-$hook", array($this, 'add_teacher_dashboard_screen_options'));
+        
+        // Add submenu items
         add_submenu_page(
-            'my-classes',
+            'school-teacher-dashboard',
             __('My Students', 'school-manager-lite'),
             __('My Students', 'school-manager-lite'),
             'school_teacher',
-            'my-students',
-            array($this, 'render_my_students_page')
+            'school-teacher-students',
+            array($this, 'render_teacher_students_page')
         );
+        
+        add_submenu_page(
+            'school-teacher-dashboard',
+            __('My Classes', 'school-manager-lite'),
+            __('My Classes', 'school-manager-lite'),
+            'school_teacher',
+            'school-teacher-classes',
+            array($this, 'render_teacher_classes_page')
+        );
+        
+        // Redirect old URLs to the new dashboard
+        add_action('admin_init', array($this, 'redirect_old_teacher_urls'));
     }
     
     /**
-     * Render my classes page
+     * Redirect old teacher URLs to the new dashboard
      */
-    public function render_my_classes_page() {
-        global $wpdb;
-        
-        echo '<div class="wrap">';
-        echo '<h1>' . __('My Classes', 'school-manager-lite') . '</h1>';
-        
-        $current_user_id = get_current_user_id();
-        $classes = $this->get_teacher_classes($current_user_id);
-        
-        if (empty($classes)) {
-            echo '<p>' . __('You have no classes assigned.', 'school-manager-lite') . '</p>';
-        } else {
-            echo '<table class="widefat fixed" style="margin-top:1em;">';
-            echo '<thead><tr>';
-            echo '<th>' . __('Class Name', 'school-manager-lite') . '</th>';
-            echo '<th>' . __('Description', 'school-manager-lite') . '</th>';
-            echo '<th>' . __('Students', 'school-manager-lite') . '</th>';
-            echo '</tr></thead>';
-            
-            echo '<tbody>';
-            $student_manager = School_Manager_Lite_Student_Manager::instance();
-            foreach ($classes as $class) {
-                $student_count = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}school_students WHERE class_id = %d", $class->id));
-                
-                echo '<tr>';
-                echo '<td>' . esc_html($class->name) . '</td>';
-                echo '<td>' . esc_html($class->description) . '</td>';
-                echo '<td>' . intval($student_count) . '</td>';
-                echo '</tr>';
-            }
-            echo '</tbody></table>';
+    public function redirect_old_teacher_urls() {
+        if (!is_admin() || !current_user_can('school_teacher')) {
+            return;
         }
         
-        echo '</div>';
+        $current_page = isset($_GET['page']) ? $_GET['page'] : '';
+        $old_pages = array('class-management', 'school-classes');
+        
+        if (in_array($current_page, $old_pages)) {
+            wp_redirect(admin_url('admin.php?page=school-teacher-dashboard'));
+            exit;
+        }
+    }
+    
+    /**
+     * Add screen options for the teacher dashboard
+     */
+    public function add_teacher_dashboard_screen_options() {
+        $option = 'per_page';
+        $args = array(
+            'label' => __('Items per page', 'school-manager-lite'),
+            'default' => 20,
+            'option' => 'teacher_dashboard_per_page'
+        );
+        add_screen_option($option, $args);
+    }
+    
+    /**
+     * Render teacher dashboard
+     */
+    public function render_teacher_dashboard() {
+        if (!current_user_can('school_teacher')) {
+            wp_die(__('You do not have sufficient permissions to access this page.'));
+        }
+        
+        $teacher_id = get_current_user_id();
+        $students = $this->get_teacher_students($teacher_id);
+        $classes = $this->get_teacher_classes($teacher_id);
+        ?>
+        <div class="wrap">
+            <h1><?php _e('Teacher Dashboard', 'school-manager-lite'); ?></h1>
+            
+            <div class="teacher-dashboard-content">
+                <div class="teacher-stats">
+                    <div class="stat-box">
+                        <h3><?php _e('Total Students', 'school-manager-lite'); ?></h3>
+                        <p class="stat-number"><?php echo count($students); ?></p>
+                    </div>
+                    
+                    <div class="stat-box">
+                        <h3><?php _e('Total Classes', 'school-manager-lite'); ?></h3>
+                        <p class="stat-number"><?php echo count($classes); ?></p>
+                    </div>
+                </div>
+                
+                <div class="recent-students">
+                    <h2><?php _e('Recent Students', 'school-manager-lite'); ?></h2>
+                    <?php if (!empty($students)) : ?>
+                        <table class="wp-list-table widefat fixed striped">
+                            <thead>
+                                <tr>
+                                    <th><?php _e('Name', 'school-manager-lite'); ?></th>
+                                    <th><?php _e('Email', 'school-manager-lite'); ?></th>
+                                    <th><?php _e('Status', 'school-manager-lite'); ?></th>
+                                    <th><?php _e('Actions', 'school-manager-lite'); ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php 
+                                $student_manager = School_Manager_Lite_Student_Manager::instance();
+                                $count = 0;
+                                foreach ($students as $student) : 
+                                    if ($count >= 5) break;
+                                    $status = get_user_meta($student->ID, 'school_student_status', true);
+                                    $status_label = $status === 'active' ? __('Active', 'school-manager-lite') : __('Inactive', 'school-manager-lite');
+                                    $status_class = $status === 'active' ? 'status-active' : 'status-inactive';
+                                    $count++;
+                                ?>
+                                    <tr>
+                                        <td><?php echo esc_html($student->display_name); ?></td>
+                                        <td><?php echo esc_html($student->user_email); ?></td>
+                                        <td><span class="<?php echo esc_attr($status_class); ?>"><?php echo esc_html($status_label); ?></span></td>
+                                        <td>
+                                            <a href="<?php echo esc_url(admin_url('user-edit.php?user_id=' . $student->ID)); ?>" class="button button-small">
+                                                <?php _e('View Profile', 'school-manager-lite'); ?>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        <?php if (count($students) > 5) : ?>
+                            <p class="view-all">
+                                <a href="<?php echo esc_url(admin_url('admin.php?page=school-teacher-students')); ?>">
+                                    <?php _e('View all students', 'school-manager-lite'); ?> &rarr;
+                                </a>
+                            </p>
+                        <?php endif; ?>
+                    <?php else : ?>
+                        <p><?php _e('No students assigned yet.', 'school-manager-lite'); ?></p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <style>
+            .teacher-dashboard-content { margin-top: 20px; }
+            .teacher-stats { display: flex; gap: 20px; margin-bottom: 30px; }
+            .stat-box { 
+                background: #fff; 
+                padding: 20px; 
+                border-radius: 4px; 
+                box-shadow: 0 1px 1px rgba(0,0,0,.04);
+                flex: 1;
+            }
+            .stat-box h3 { margin: 0 0 10px 0; font-size: 14px; color: #646970; }
+            .stat-number { font-size: 32px; font-weight: 600; margin: 0; line-height: 1; }
+        <?php
+    }
+    
+    /**
+     * Render teacher students page
+     */
+    public function render_teacher_students_page() {
+        if (!current_user_can('school_teacher')) {
+            wp_die(__('You do not have sufficient permissions to access this page.'));
+        }
+        
+        $teacher_id = get_current_user_id();
+        $students = $this->get_teacher_students($teacher_id);
+        ?>
+        <div class="wrap">
+            <h1><?php _e('My Students', 'school-manager-lite'); ?></h1>
+            
+            <?php if (!empty($students)) : ?>
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th><?php _e('Name', 'school-manager-lite'); ?></th>
+                            <th><?php _e('Email', 'school-manager-lite'); ?></th>
+                            <th><?php _e('Status', 'school-manager-lite'); ?></th>
+                            <th><?php _e('Actions', 'school-manager-lite'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        $student_manager = School_Manager_Lite_Student_Manager::instance();
+                        foreach ($students as $student) : 
+                            $status = get_user_meta($student->ID, 'school_student_status', true);
+                            $status_label = $status === 'active' ? __('Active', 'school-manager-lite') : __('Inactive', 'school-manager-lite');
+                            $status_class = $status === 'active' ? 'status-active' : 'status-inactive';
+                        ?>
+                            <tr>
+                                <td><?php echo esc_html($student->display_name); ?></td>
+                                <td><?php echo esc_html($student->user_email); ?></td>
+                                <td><span class="<?php echo esc_attr($status_class); ?>"><?php echo esc_html($status_label); ?></span></td>
+                                <td>
+                                    <a href="<?php echo esc_url(admin_url('user-edit.php?user_id=' . $student->ID)); ?>" class="button button-small">
+                                        <?php _e('View Profile', 'school-manager-lite'); ?>
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else : ?>
+                <p><?php _e('No students assigned to you yet.', 'school-manager-lite'); ?></p>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+    
+    /**
+     * Render teacher classes page
+     */
+    public function render_teacher_classes_page() {
+        if (!current_user_can('school_teacher')) {
+            wp_die(__('You do not have sufficient permissions to access this page.'));
+        }
+        
+        $teacher_id = get_current_user_id();
+        $classes = $this->get_teacher_classes($teacher_id);
+        ?>
+        <div class="wrap">
+            <h1><?php _e('My Classes', 'school-manager-lite'); ?></h1>
+            
+            <?php if (!empty($classes)) : ?>
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th><?php _e('Class Name', 'school-manager-lite'); ?></th>
+                            <th><?php _e('Description', 'school-manager-lite'); ?></th>
+                            <th><?php _e('Students', 'school-manager-lite'); ?></th>
+                            <th><?php _e('Actions', 'school-manager-lite'); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                        global $wpdb;
+                        foreach ($classes as $class) : 
+                            $student_count = $wpdb->get_var($wpdb->prepare(
+                                "SELECT COUNT(*) FROM {$wpdb->prefix}school_teacher_students WHERE teacher_id = %d AND class_id = %d",
+                                $teacher_id,
+                                $class->id
+                            ));
+                        ?>
+                            <tr>
+                                <td><?php echo esc_html($class->name); ?></td>
+                                <td><?php echo esc_html($class->description); ?></td>
+                                <td><?php echo intval($student_count); ?></td>
+                                <td>
+                                    <a href="<?php echo esc_url(admin_url('admin.php?page=school-teacher-students&class_id=' . $class->id)); ?>" class="button button-small">
+                                        <?php _e('View Students', 'school-manager-lite'); ?>
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else : ?>
+                <p><?php _e('No classes assigned to you yet.', 'school-manager-lite'); ?></p>
+            <?php endif; ?>
+        </div>
+        <?php
     }
     
     /**

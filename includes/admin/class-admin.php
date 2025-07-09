@@ -44,6 +44,62 @@ class School_Manager_Lite_Admin {
         // Admin AJAX handlers
         add_action('wp_ajax_download_sample_csv', array($this, 'handle_download_sample_csv'));
         add_action('wp_ajax_quick_edit_student', array($this, 'handle_quick_edit_student'));
+        
+        // Include required files
+        $this->includes();
+    }
+    
+    /**
+     * Enqueue admin scripts and styles
+     */
+    public function enqueue_admin_scripts($hook) {
+        // Only load on our plugin pages
+        if (strpos($hook, 'school-manager') === false) {
+            return;
+        }
+        
+        // Ensure jQuery UI is loaded
+        wp_enqueue_script('jquery-ui-core');
+        wp_enqueue_script('jquery-ui-dialog');
+        wp_enqueue_style('wp-jquery-ui-dialog');
+        
+        // Admin styles
+        wp_enqueue_style(
+            'school-manager-admin',
+            SCHOOL_MANAGER_LITE_URL . 'assets/css/admin.css',
+            array(),
+            SCHOOL_MANAGER_LITE_VERSION
+        );
+        
+        // Admin scripts
+        wp_enqueue_script(
+            'school-manager-admin',
+            SCHOOL_MANAGER_LITE_URL . 'assets/js/admin.js',
+            array('jquery', 'jquery-ui-dialog'),
+            SCHOOL_MANAGER_LITE_VERSION,
+            true
+        );
+        
+        // Localize script with AJAX URL and translations
+        wp_localize_script(
+            'school-manager-admin',
+            'schoolManagerLiteAdmin',
+            array(
+                'ajax_url' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('school_manager_lite_admin_nonce'),
+                'i18n' => array(
+                    'confirm_delete' => __('Are you sure you want to delete this item?', 'school-manager-lite'),
+                    'error' => __('An error occurred. Please try again.', 'school-manager-lite'),
+                    'saving' => __('Saving...', 'school-manager-lite'),
+                    'saved' => __('Saved!', 'school-manager-lite'),
+                    'importing' => __('Importing...', 'school-manager-lite'),
+                    'exporting' => __('Exporting...', 'school-manager-lite'),
+                )
+            )
+        );
+        
+        // Add thickbox for file uploads
+        add_thickbox();
     }
 
     /**
@@ -51,7 +107,7 @@ class School_Manager_Lite_Admin {
      */
     private function includes() {
         // Include teacher dashboard class
-        require_once plugin_dir_path(dirname(__FILE__)) . 'admin/class-teacher-dashboard.php';
+        require_once dirname(__DIR__) . '/class-teacher-dashboard.php';
         
         // Initialize teacher dashboard
         School_Manager_Lite_Teacher_Dashboard::instance();
@@ -153,52 +209,7 @@ class School_Manager_Lite_Admin {
         );
     }
 
-    /**
-     * Enqueue admin scripts and styles
-     */
-    public function enqueue_admin_scripts($hook) {
-        // Only load on our plugin pages
-        if (strpos($hook, 'school-manager') === false) {
-            return;
-        }
-        
-        // Admin styles
-        wp_enqueue_style(
-            'school-manager-admin',
-            SCHOOL_MANAGER_LITE_PLUGIN_URL . 'assets/css/admin.css',
-            array(),
-            SCHOOL_MANAGER_LITE_VERSION
-        );
-        
-        // Admin scripts
-        wp_enqueue_script(
-            'school-manager-admin',
-            SCHOOL_MANAGER_LITE_PLUGIN_URL . 'assets/js/admin.js',
-            array('jquery'),
-            SCHOOL_MANAGER_LITE_VERSION,
-            true
-        );
-        
-        // Localize script with AJAX URL and translations
-        wp_localize_script(
-            'school-manager-admin',
-            'schoolManagerAdmin',
-            array(
-                'ajax_url' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('school_manager_admin_nonce'),
-                'confirm_delete' => __('Are you sure you want to delete this item?', 'school-manager-lite'),
-                'importing' => __('Importing...', 'school-manager-lite'),
-                'exporting' => __('Exporting...', 'school-manager-lite'),
-            )
-        );
-        
-        // Add thickbox for file uploads
-        add_thickbox();
-    }
 
-    /**
-     * Render the main admin page
-     */
     public function render_dashboard_page() {
         // Get teacher manager instance to pass to the template
         $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
@@ -367,11 +378,21 @@ class School_Manager_Lite_Admin {
         if (isset($_GET['page']) && $_GET['page'] === 'school-manager-students' && isset($_GET['action'])) {
             $student_manager = School_Manager_Lite_Student_Manager::instance();
             
-            // Handle student deletion
-            if ($_GET['action'] === 'delete' && isset($_GET['student_id']) && check_admin_referer('delete_student')) {
-                $student_id = intval($_GET['student_id']);
-                $student_manager->delete_student($student_id, true);
-                
+            // Handle student deletion (single row)
+            if ($_GET['action'] === 'delete' && isset($_GET['id'])) {
+                $student_id = intval($_GET['id']);
+
+                // Verify nonce matches action delete_student_<ID>
+                $nonce_action = 'delete_student_' . $student_id;
+                if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], $nonce_action)) {
+                    wp_die(__('Security check failed.', 'school-manager-lite'));
+                }
+
+                $result = $student_manager->delete_student($student_id);
+                if (is_wp_error($result)) {
+                    wp_die($result->get_error_message());
+                }
+
                 // Redirect back to students list
                 wp_redirect(admin_url('admin.php?page=school-manager-students&deleted=1'));
                 exit;

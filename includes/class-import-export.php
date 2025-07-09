@@ -307,8 +307,111 @@ class School_Manager_Lite_Import_Export {
         exit();
     }
     
-    // Import methods for each type would be implemented here
-    private function import_students($handle) { /* ... */ }
+    /**
+     * Import students from CSV
+     * Expected columns: ID, Name, Username, Password, Email, Class ID, Status
+     */
+    private function import_students($handle) {
+        if (!$handle) {
+            return;
+        }
+
+        $student_manager = School_Manager_Lite_Student_Manager::instance();
+        $class_manager   = School_Manager_Lite_Class_Manager::instance();
+
+        $imported = 0;
+        $updated  = 0;
+        
+        while (($row = fgetcsv($handle)) !== false) {
+            if (empty(array_filter($row))) {
+                continue; // skip empty lines
+            }
+
+            list($id, $name, $username, $password, $email, $class_id, $status) = array_pad($row, 7, '');
+
+            // Basic validation – need at least name, username & password
+            if (empty($name) || empty($username) || empty($password)) {
+                continue; // skip invalid row
+            }
+
+            // Ensure email
+            if (empty($email)) {
+                $email = sanitize_user($username, true) . '@example.com';
+            }
+
+            // Validate class exists (optional)
+            if (!empty($class_id) && !$class_manager->get_class($class_id)) {
+                $class_id = 0; // ignore invalid class
+            }
+
+            // If ID present try updating existing student by WP user ID
+            if (!empty($id)) {
+                $user = get_user_by('id', intval($id));
+                if ($user) {
+                    // Update basic WP user fields
+                    wp_update_user(array(
+                        'ID'           => $user->ID,
+                        'user_login'   => $username,
+                        'user_email'   => $email,
+                        'display_name' => $name,
+                    ));
+
+                    // Update first + last name if we can split
+                    $parts = explode(' ', $name, 2);
+                    update_user_meta($user->ID, 'first_name', $parts[0]);
+                    if (isset($parts[1])) {
+                        update_user_meta($user->ID, 'last_name', $parts[1]);
+                    }
+
+                    // Update student status meta
+                    if (!empty($status)) {
+                        update_user_meta($user->ID, 'school_student_status', $status);
+                    }
+
+                    // Update custom students table class or email
+                    $student = $student_manager->get_student_by_wp_user_id($user->ID);
+                    if ($student) {
+                        $student_manager->update_student($student->id, array(
+                            'class_id' => $class_id,
+                            'email'    => $email,
+                            'name'     => $name,
+                            'status'   => $status,
+                        ));
+                    }
+
+                    $updated++;
+                    continue;
+                }
+            }
+
+            // Otherwise create new student
+            $create = $student_manager->create_student(array(
+                'name'       => $name,
+                'class_id'   => $class_id,
+                'user_pass'  => $password,
+                'user_login' => $username,
+                'email'      => $email,
+                'status'     => $status,
+            ));
+
+            if (!is_wp_error($create)) {
+                $imported++;
+            }
+        }
+
+        fclose($handle);
+
+        // Redirect with notice
+        $redirect_url = add_query_arg(array(
+            'page'     => 'school-manager-import-export',
+            'imported' => 1,
+            'added'    => $imported,
+            'updated'  => $updated,
+        ), admin_url('admin.php'));
+
+        wp_redirect($redirect_url);
+        exit();
+    }
     /**
      * Import teachers from CSV
      * Expected columns: ID, Username, Email, First Name, Last Name, Status

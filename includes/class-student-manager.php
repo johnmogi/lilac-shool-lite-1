@@ -42,6 +42,86 @@ class School_Manager_Lite_Student_Manager {
     public function init() {
         // Nothing to initialize yet
     }
+    
+    /**
+     * Delete a student
+     * 
+     * @param int $student_id The student ID to delete
+     * @return bool|WP_Error True on success, WP_Error on failure
+     */
+    public function delete_student($student_id) {
+        global $wpdb;
+        
+        // Get the student data before deletion
+        $student = $this->get_student($student_id);
+        
+        if (!$student) {
+            return new WP_Error('invalid_student', __('Invalid student ID', 'school-manager-lite'));
+        }
+        
+        // Start transaction
+        $wpdb->query('START TRANSACTION');
+        
+        try {
+            // Delete from the students table
+            $table_name = $wpdb->prefix . 'school_students';
+            $result = $wpdb->delete(
+                $table_name,
+                array('id' => $student_id),
+                array('%d')
+            );
+            
+            if ($result === false) {
+                throw new Exception(__('Failed to delete student from the database.', 'school-manager-lite'));
+            }
+            
+            // If there's a WordPress user associated, delete that as well
+            if (!empty($student->wp_user_id)) {
+                // First, remove any LearnDash course access
+                if (function_exists('ld_update_course_access')) {
+                    $student_classes = $this->get_student_classes($student->wp_user_id);
+                    foreach ($student_classes as $class) {
+                        $ld_course_id = 898; // default course ID fallback
+                        if (isset($class->course_id) && $class->course_id) {
+                            $ld_course_id = $class->course_id;
+                        }
+                        ld_update_course_access($student->wp_user_id, $ld_course_id, $remove=true);
+                    }
+                }
+                
+                // Then delete the user
+                if (!wp_delete_user($student->wp_user_id)) {
+                    throw new Exception(__('Failed to delete associated WordPress user.', 'school-manager-lite'));
+                }
+            }
+            
+            // Delete student's class relationships
+            $student_class_table = $wpdb->prefix . 'school_student_class';
+            $wpdb->delete(
+                $student_class_table,
+                array('student_id' => $student_id),
+                array('%d')
+            );
+            
+            // Delete student's teacher relationships
+            $teacher_student_table = $wpdb->prefix . 'school_teacher_students';
+            $wpdb->delete(
+                $teacher_student_table,
+                array('student_id' => $student_id),
+                array('%d')
+            );
+            
+            // Commit transaction
+            $wpdb->query('COMMIT');
+            
+            return true;
+            
+        } catch (Exception $e) {
+            // Rollback transaction on error
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('delete_failed', $e->getMessage());
+        }
+    }
 
     /**
      * Get students from custom table

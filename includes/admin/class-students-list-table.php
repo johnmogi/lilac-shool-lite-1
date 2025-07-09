@@ -42,6 +42,7 @@ class School_Manager_Lite_Students_List_Table extends WP_List_Table {
             'name'          => __('Student Name', 'school-manager-lite'),
             'email'         => __('Email', 'school-manager-lite'),
             'classes'       => __('Classes', 'school-manager-lite'),
+            'course_id'    => __('Course', 'school-manager-lite'),
             'teacher'       => __('Teacher', 'school-manager-lite'),
             'promo_code'    => __('Promo Code', 'school-manager-lite'),
             'status'        => __('Status', 'school-manager-lite'),
@@ -60,7 +61,8 @@ class School_Manager_Lite_Students_List_Table extends WP_List_Table {
             'name'       => array('display_name', false),
             'email'      => array('user_email', false),
             'registered' => array('user_registered', true), // true means it's already sorted
-            'status'     => array('status', false)
+            'status'     => array('status', false),
+            'course_id'  => array('course_id', false)
         );
         return $sortable_columns;
     }
@@ -72,6 +74,17 @@ class School_Manager_Lite_Students_List_Table extends WP_List_Table {
         switch ($column_name) {
             case 'email':
                 return esc_html($item->user_email);
+            case 'course_id':
+                // Get first class course id
+                $student_manager = School_Manager_Lite_Student_Manager::instance();
+                $classes = $student_manager->get_student_classes($item->ID);
+                if ($classes) {
+                    $class = $classes[0];
+                    if (isset($class->course_id) && $class->course_id) {
+                        return esc_html($class->course_id);
+                    }
+                }
+                return '—';
             case 'registered':
                 return date_i18n(get_option('date_format'), strtotime($item->user_registered));
             default:

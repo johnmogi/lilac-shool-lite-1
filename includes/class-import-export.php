@@ -85,7 +85,7 @@ class School_Manager_Lite_Import_Export {
         $students = $student_manager->get_students(array('limit' => -1));
         
         // Headers
-        fputcsv($output, array('ID', 'Name', 'Email', 'Class ID', 'Course ID', 'Registration Date', 'Expiry Date', 'Status'));
+        fputcsv($output, array('ID', 'Name', 'Email', 'Class ID', 'Teacher ID', 'Course ID', 'Registration Date', 'Expiry Date', 'Status'));
         
         // Data
         foreach ($students as $student) {
@@ -94,13 +94,20 @@ class School_Manager_Lite_Import_Export {
             $name        = isset($student->name) ? $student->name : '';
             $email       = isset($student->email) ? $student->email : '';
             $class_id    = isset($student->class_id) ? $student->class_id : '';
+            // Determine Teacher ID via class
+            $teacher_id = '';
             // Determine LearnDash course ID; default 898 if not found
             $course_id   = 898;
             if ($class_id) {
                 $class_manager = School_Manager_Lite_Class_Manager::instance();
                 $class = $class_manager->get_class($class_id);
-                if ($class && isset($class->course_id) && $class->course_id) {
-                    $course_id = $class->course_id;
+                if ($class) {
+                    if (isset($class->teacher_id) && $class->teacher_id) {
+                        $teacher_id = $class->teacher_id;
+                    }
+                    if (isset($class->course_id) && $class->course_id) {
+                        $course_id = $class->course_id;
+                    }
                 }
             }
             // Expiry date: 30/06 current academic year (if already passed, use next year)
@@ -117,6 +124,7 @@ class School_Manager_Lite_Import_Export {
                 $name,
                 $email,
                 $class_id,
+                $teacher_id,
                 $course_id,
                 $created_at,
                 $expiry_date,

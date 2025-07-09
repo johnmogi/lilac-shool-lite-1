@@ -112,7 +112,7 @@ class School_Manager_Lite_Admin {
             array($this, 'render_students_page')
         );
         
-        // Promo Codes
+        // Promo Codes list
         add_submenu_page(
             'school-manager',
             __('Promo Codes', 'school-manager-lite'),
@@ -120,6 +120,15 @@ class School_Manager_Lite_Admin {
             'manage_options',
             'school-manager-promo-codes',
             array($this, 'render_promo_codes_page')
+        );
+        // Promo Codes Generator
+        add_submenu_page(
+            'school-manager',
+            __('Generate Promo Codes', 'school-manager-lite'),
+            __('Generate Codes', 'school-manager-lite'),
+            'manage_options',
+            'school-manager-promo-generate',
+            array($this, 'render_promo_generate_page')
         );
         
         // Import/Export
@@ -262,6 +271,13 @@ class School_Manager_Lite_Admin {
     /**
      * Render the import/export page
      */
+    /**
+     * Render promo code generator page
+     */
+    public function render_promo_generate_page() {
+        require_once SCHOOL_MANAGER_LITE_PLUGIN_DIR . 'templates/admin/admin-promo-generate.php';
+    }
+
     public function render_import_export_page() {
         // Make sure Import/Export class is loaded
         if (!class_exists('School_Manager_Lite_Import_Export')) {

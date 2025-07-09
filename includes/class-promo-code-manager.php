@@ -492,6 +492,27 @@ class School_Manager_Lite_Promo_Code_Manager {
      * @param int $length Code length (excluding prefix)
      * @return string Unique code
      */
+        /**
+     * Normalize expiry date: if provided date is before today, move to next year same day
+     *
+     * @param string|null $date YYYY-MM-DD or null
+     * @return string|null Normalized date or null
+     */
+    private function normalize_expiry_date($date) {
+        if (empty($date)) {
+            return null;
+        }
+        $timestamp = strtotime($date);
+        if ($timestamp === false) {
+            return null;
+        }
+        if ($timestamp < time()) {
+            // add one year
+            return date('Y-m-d', strtotime('+1 year', $timestamp));
+        }
+        return date('Y-m-d', $timestamp);
+    }
+
     private function generate_unique_code($prefix = '', $length = 8) {
         global $wpdb;
         $table_name = $wpdb->prefix . 'school_promo_codes';

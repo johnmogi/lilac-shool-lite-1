@@ -704,21 +704,33 @@ class School_Manager_Lite_Promo_Code_Manager {
         $class_manager = School_Manager_Lite_Class_Manager::instance();
         $class = $class_manager->get_class($promo->class_id);
         
-        // Auto-login the user if possible
+        // Ensure we have the student manager instance
+        $student_manager = School_Manager_Lite_Student_Manager::instance();
+
+        // Auto-login and capture WP user ID
         $student_row = $student_manager->get_student( $student_id );
+        $wp_user_id  = null;
         if ( $student_row && ! empty( $student_row->wp_user_id ) ) {
-            wp_set_current_user( $student_row->wp_user_id );
-            wp_set_auth_cookie( $student_row->wp_user_id );
+            $wp_user_id = (int) $student_row->wp_user_id;
+            // log user in
+            wp_set_current_user( $wp_user_id );
+            wp_set_auth_cookie( $wp_user_id );
         }
 
-        // Enroll the student into the LearnDash course (default 898 or class-specific)
-        $ld_course_id = 898;
-        if ($class && isset($class->course_id) && $class->course_id) {
-            $ld_course_id = $class->course_id;
+        // Update the student's status meta to active (for both new & existing users)
+        if ( $wp_user_id ) {
+            update_user_meta( $wp_user_id, 'school_student_status', 'active' );
         }
-        // Ensure LearnDash function exists
-        if (function_exists('ld_update_course_access') && $student_id) {
-            ld_update_course_access($student_id, $ld_course_id);
+
+        // Determine LearnDash course ID (fallback 898)
+        $ld_course_id = 898;
+        if ( $class && isset( $class->course_id ) && $class->course_id ) {
+            $ld_course_id = (int) $class->course_id;
+        }
+
+        // Enroll in LearnDash – must use the WP user ID
+        if ( function_exists( 'ld_update_course_access' ) && $wp_user_id && $ld_course_id ) {
+            ld_update_course_access( $wp_user_id, $ld_course_id, /* remove */ false );
         }
         
         do_action('school_manager_lite_after_redeem_promo_code', $promo->id, $student_id, $class);

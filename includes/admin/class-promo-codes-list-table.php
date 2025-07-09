@@ -146,17 +146,22 @@ class School_Manager_Lite_Promo_Codes_List_Table extends WP_List_Table {
      * Column student
      */
     public function column_student($item) {
-        if (empty($item->user_id)) {
+        if ( empty( $item->student_id ) ) {
             return '—';
         }
 
-        $student = get_user_by('id', $item->user_id);
-        
-        if ($student) {
+        $student_manager = School_Manager_Lite_Student_Manager::instance();
+        $student_row     = $student_manager->get_student( $item->student_id );
+        if ( ! $student_row || empty( $student_row->wp_user_id ) ) {
+            return __('Student not found', 'school-manager-lite');
+        }
+
+        $wp_user = get_user_by( 'id', $student_row->wp_user_id );
+        if ( $wp_user ) {
             return sprintf(
                 '<a href="%s">%s</a>',
-                admin_url('user-edit.php?user_id=' . $student->ID),
-                esc_html($student->display_name)
+                admin_url( 'user-edit.php?user_id=' . $wp_user->ID ),
+                esc_html( $wp_user->display_name )
             );
         }
 

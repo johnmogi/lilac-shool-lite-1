@@ -51,6 +51,9 @@ class School_Manager_Lite_Shortcodes {
         add_shortcode('school_promo_code_redemption', array($this, 'promo_code_redemption_shortcode'));
         // Ensure the school_manager_redeem shortcode is registered as an alias
         add_shortcode('school_manager_redeem', array($this, 'promo_code_redemption_shortcode'));
+
+        // Shortcode to allow student to freeze / pause their enrollment
+        add_shortcode('school_freeze_access', array($this, 'freeze_access_shortcode'));
         
         // Log successful shortcode registration
         error_log('School Manager Lite: Class-based shortcodes registered successfully');
@@ -228,6 +231,35 @@ class School_Manager_Lite_Shortcodes {
                 'student_id' => $result
             ));
         }
+    }
+
+    /**
+     * Shortcode handler to freeze / pause a student's LearnDash course access.
+     * Usage: [school_freeze_access]
+     */
+    public function freeze_access_shortcode( $atts ) {
+        if ( ! is_user_logged_in() ) {
+            return __( 'You need to be logged in to freeze your course access.', 'school-manager-lite' );
+        }
+        $wp_user_id      = get_current_user_id();
+        $student_manager = School_Manager_Lite_Student_Manager::instance();
+        $student_row     = $student_manager->get_student_by_wp_user_id( $wp_user_id );
+        if ( ! $student_row ) {
+            return __( 'You are not recognised as a student in the system.', 'school-manager-lite' );
+        }
+        $class_manager = School_Manager_Lite_Class_Manager::instance();
+        $class         = $class_manager->get_class( $student_row->class_id );
+        $course_id     = 898; // default fallback course ID
+        if ( $class && isset( $class->course_id ) && $class->course_id ) {
+            $course_id = (int) $class->course_id;
+        }
+        // Remove LearnDash course access
+        if ( function_exists( 'ld_update_course_access' ) ) {
+            ld_update_course_access( $wp_user_id, $course_id, /* remove */ true );
+        }
+        // Mark user as inactive
+        update_user_meta( $wp_user_id, 'school_student_status', 'inactive' );
+        return __( 'Your course access has been paused successfully.', 'school-manager-lite' );
     }
 }
 

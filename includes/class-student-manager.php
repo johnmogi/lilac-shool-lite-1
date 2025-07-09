@@ -475,6 +475,70 @@ class School_Manager_Lite_Student_Manager {
     }
     
     /**
+     * Add student to class
+     * 
+     * @param int $wp_user_id WordPress user ID of the student
+     * @param int $class_id Class ID to assign
+     * @return bool|WP_Error True on success, WP_Error on failure
+     */
+    public function add_student_to_class($wp_user_id, $class_id) {
+        global $wpdb;
+        
+        // Validate student exists
+        $student = $this->get_student_by_wp_user_id($wp_user_id);
+        if (!$student) {
+            return new WP_Error('invalid_student', __('Invalid student', 'school-manager-lite'));
+        }
+        
+        // Validate class exists
+        $class_manager = School_Manager_Lite_Class_Manager::instance();
+        $class = $class_manager->get_class($class_id);
+        if (!$class) {
+            return new WP_Error('invalid_class', __('Invalid class', 'school-manager-lite'));
+        }
+        
+        // Update student's class
+        $update_data = array(
+            'class_id' => intval($class_id),
+            'updated_at' => current_time('mysql')
+        );
+        
+        $table_name = $wpdb->prefix . 'school_students';
+        $result = $wpdb->update(
+            $table_name,
+            $update_data,
+            array('id' => $student->id),
+            array('%d', '%s'),
+            array('%d')
+        );
+        
+        if ($result === false) {
+            return new WP_Error('db_error', __('Could not update student class', 'school-manager-lite'));
+        }
+        
+        // If LearnDash integration enabled, update course enrollment based on class
+        if (function_exists('ld_update_course_access')) {
+            // Get course ID from class
+            $course_id = 898; // default course ID
+            if (isset($class->course_id) && !empty($class->course_id)) {
+                $course_id = $class->course_id;
+            }
+            
+            // Check if student is active
+            $is_active = get_user_meta($wp_user_id, 'school_student_status', true);
+            
+            if ($is_active == 'active') {
+                // Enroll in course
+                ld_update_course_access($wp_user_id, $course_id, false);
+            }
+        }
+        
+        do_action('school_manager_lite_after_student_class_assignment', $wp_user_id, $class_id);
+        
+        return true;
+    }
+
+    /**
      * Get student users
      * 
      * @param array $args Query arguments

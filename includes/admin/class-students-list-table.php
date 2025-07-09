@@ -629,7 +629,72 @@ class School_Manager_Lite_Students_List_Table extends WP_List_Table {
             <?php endif; ?>
             
             <?php submit_button(__('Filter', 'school-manager-lite'), '', 'filter_action', false); ?>
+            <?php if (!empty($classes) || !empty($teachers)) : ?>
+                <input type="button" id="doaction-bulk-assign" class="button action" value="<?php esc_attr_e('Apply', 'school-manager-lite'); ?>">
+            <?php endif; ?>
         </div>
+
+        <script type="text/javascript">
+        jQuery(document).ready(function($) {
+            // Handle bulk assign class/teacher action button
+            $('#doaction-bulk-assign').on('click', function() {
+                var selected = [];
+                var action = '';
+                var redirect = '';
+                var nonce = '<?php echo wp_create_nonce('bulk-' . $this->_args['plural']); ?>';
+                
+                // Get all selected checkboxes
+                $('input[name="student_id[]"]:checked').each(function() {
+                    selected.push($(this).val());
+                });
+                
+                if (selected.length === 0) {
+                    alert('<?php esc_html_e('Please select at least one student.', 'school-manager-lite'); ?>');
+                    return;
+                }
+                
+                // Check which dropdown has a value
+                var class_id = $('#bulk_class_id').val();
+                var teacher_id = $('#bulk_teacher_id').val();
+                
+                if (class_id) {
+                    action = 'assign_class';
+                    redirect = '<?php echo admin_url('admin.php?page=school-manager-students'); ?>&action=' + action + '&class_id=' + class_id;
+                } else if (teacher_id) {
+                    action = 'assign_teacher';
+                    redirect = '<?php echo admin_url('admin.php?page=school-manager-students'); ?>&action=' + action + '&teacher_id=' + teacher_id;
+                } else {
+                    alert('<?php esc_html_e('Please select a class or teacher to assign.', 'school-manager-lite'); ?>');
+                    return;
+                }
+                
+                // Create a form and submit it
+                var $form = $('<form>', {
+                    'method': 'post',
+                    'action': redirect
+                });
+                
+                // Add nonce
+                $form.append($('<input>', {
+                    'type': 'hidden',
+                    'name': '_wpnonce',
+                    'value': nonce
+                }));
+                
+                // Add selected student IDs
+                $.each(selected, function(i, student_id) {
+                    $form.append($('<input>', {
+                        'type': 'hidden',
+                        'name': 'student_id[]',
+                        'value': student_id
+                    }));
+                });
+                
+                // Submit form
+                $form.appendTo('body').submit();
+            });
+        });
+        </script>
         <?php
     }
 }

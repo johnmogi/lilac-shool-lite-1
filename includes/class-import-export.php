@@ -309,7 +309,7 @@ class School_Manager_Lite_Import_Export {
     
     /**
      * Import students from CSV
-     * Expected columns: ID, Name, Username, Password, Email, Class ID, Status
+     * Expected columns: ID, Name, Email, Class ID, Teacher ID, Course ID, Registration Date, Expiry Date, Status
      */
     private function import_students($handle) {
         if (!$handle) {
@@ -321,93 +321,144 @@ class School_Manager_Lite_Import_Export {
 
         $imported = 0;
         $updated  = 0;
+        $errors   = array();
+        
+        // Skip header row
+        fgetcsv($handle);
         
         while (($row = fgetcsv($handle)) !== false) {
             if (empty(array_filter($row))) {
                 continue; // skip empty lines
             }
 
-            list($id, $name, $username, $password, $email, $class_id, $status) = array_pad($row, 7, '');
-
-            // Basic validation – need at least name, username & password
-            if (empty($name) || empty($username) || empty($password)) {
-                continue; // skip invalid row
+            // Expected format: ID, Name, Email, Class ID, Teacher ID, Course ID, Registration Date, Expiry Date, Status
+            list($id, $name, $email, $class_id, $teacher_id, $course_id, $registration_date, $expiry_date, $status) = array_pad($row, 9, '');
+            
+            // Basic validation
+            if (empty($name)) {
+                $errors[] = sprintf(__('Skipped row - missing name', 'school-manager-lite'));
+                continue;
             }
-
-            // Ensure email
-            if (empty($email)) {
-                $email = sanitize_user($username, true) . '@example.com';
+            
+            // Ensure valid email
+            if (empty($email) || !is_email($email)) {
+                $errors[] = sprintf(__('Skipped row - invalid email for student: %s', 'school-manager-lite'), $name);
+                continue;
             }
-
-            // Validate class exists (optional)
-            if (!empty($class_id) && !$class_manager->get_class($class_id)) {
-                $class_id = 0; // ignore invalid class
+            
+            // Generate username from email if needed
+            $username = sanitize_user(current(explode('@', $email)), true);
+            if (username_exists($username)) {
+                // Add random suffix to make unique
+                $username = $username . rand(100, 999);
             }
-
-            // If ID present try updating existing student by WP user ID
-            if (!empty($id)) {
-                $user = get_user_by('id', intval($id));
-                if ($user) {
-                    // Update basic WP user fields
-                    wp_update_user(array(
-                        'ID'           => $user->ID,
-                        'user_login'   => $username,
-                        'user_email'   => $email,
-                        'display_name' => $name,
-                    ));
-
-                    // Update first + last name if we can split
-                    $parts = explode(' ', $name, 2);
-                    update_user_meta($user->ID, 'first_name', $parts[0]);
-                    if (isset($parts[1])) {
-                        update_user_meta($user->ID, 'last_name', $parts[1]);
+            
+            // Generate random password
+            $password = wp_generate_password(8, false);
+            
+            // Validate class ID
+            if (empty($class_id) || !$class_manager->get_class($class_id)) {
+                $errors[] = sprintf(__('Skipped row - invalid class ID for student: %s', 'school-manager-lite'), $name);
+                continue;
+            }
+            
+            // Default status to active if not specified
+            if (empty($status)) {
+                $status = 'active';
+            }
+            
+            // Check for existing user by email
+            $existing_wp_user = get_user_by('email', $email);
+            $existing_student = null;
+            
+            if ($existing_wp_user) {
+                $existing_student = $student_manager->get_student_by_wp_user_id($existing_wp_user->ID);
+            }
+            
+            if ($existing_wp_user && $existing_student) {
+                // Update existing student
+                wp_update_user([
+                    'ID' => $existing_wp_user->ID,
+                    'display_name' => $name
+                ]);
+                
+                // Update student record
+                $student_manager->update_student($existing_student->id, [
+                    'name' => $name,
+                    'class_id' => $class_id,
+                    'status' => $status
+                ]);
+                
+                // Update status in user meta
+                update_user_meta($existing_wp_user->ID, 'school_student_status', $status);
+                
+                $updated++;
+            } else {
+                // Create new student
+                $student_data = [
+                    'name' => $name,
+                    'user_login' => $username,
+                    'user_pass' => $password,
+                    'email' => $email,
+                    'class_id' => $class_id,
+                    'status' => $status,
+                    'create_user' => true,
+                    'role' => 'student_private'
+                ];
+                
+                $create = $student_manager->create_student($student_data);
+                
+                if (!is_wp_error($create)) {
+                    $imported++;
+                    
+                    // Set registration date if provided
+                    if (!empty($registration_date)) {
+                        global $wpdb;
+                        $table_name = $wpdb->prefix . 'school_students';
+                        $wpdb->update(
+                            $table_name,
+                            ['created_at' => $registration_date],
+                            ['id' => $create],
+                            ['%s'],
+                            ['%d']
+                        );
                     }
-
-                    // Update student status meta
-                    if (!empty($status)) {
-                        update_user_meta($user->ID, 'school_student_status', $status);
-                    }
-
-                    // Update custom students table class or email
-                    $student = $student_manager->get_student_by_wp_user_id($user->ID);
-                    if ($student) {
-                        $student_manager->update_student($student->id, array(
-                            'class_id' => $class_id,
-                            'email'    => $email,
-                            'name'     => $name,
-                            'status'   => $status,
-                        ));
-                    }
-
-                    $updated++;
-                    continue;
+                } else {
+                    $errors[] = sprintf(__('Error importing student %s: %s', 'school-manager-lite'), 
+                        $name, $create->get_error_message());
                 }
             }
-
-            // Otherwise create new student
-            $create = $student_manager->create_student(array(
-                'name'       => $name,
-                'class_id'   => $class_id,
-                'user_pass'  => $password,
-                'user_login' => $username,
-                'email'      => $email,
-                'status'     => $status,
-            ));
-
-            if (!is_wp_error($create)) {
-                $imported++;
-            }
         }
-
+        
         fclose($handle);
+        
+        // Add admin notice with results
+        add_action('admin_notices', function() use ($imported, $updated, $errors) {
+            $message = sprintf(
+                __('Import complete: %d students added, %d students updated.', 'school-manager-lite'),
+                $imported,
+                $updated
+            );
+            
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($message) . '</p></div>';
+            
+            if (!empty($errors)) {
+                echo '<div class="notice notice-error is-dismissible"><p>' . 
+                    __('Some students could not be imported:', 'school-manager-lite') . '</p><ul>';
+                foreach ($errors as $error) {
+                    echo '<li>' . esc_html($error) . '</li>';
+                }
+                echo '</ul></div>';
+            }
+        });
 
         // Redirect with notice
-        $redirect_url = add_query_arg(array(
+        $redirect_url = add_query_arg([
             'page'     => 'school-manager-import-export',
             'imported' => 1,
             'added'    => $imported,
             'updated'  => $updated,
-        ), admin_url('admin.php'));
+        ], admin_url('admin.php'));
 
         wp_redirect($redirect_url);
         exit();

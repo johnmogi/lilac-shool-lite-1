@@ -89,13 +89,21 @@ class School_Manager_Lite_Import_Export {
         
         // Data
         foreach ($students as $student) {
+            // Some rows may not have all properties set; provide sensible defaults
+            $id          = isset($student->id) ? $student->id : '';
+            $name        = isset($student->name) ? $student->name : '';
+            $email       = isset($student->email) ? $student->email : '';
+            $class_id    = isset($student->class_id) ? $student->class_id : '';
+            $created_at  = isset($student->created_at) ? $student->created_at : '';
+            $status      = isset($student->status) && $student->status ? $student->status : 'active';
+
             fputcsv($output, array(
-                $student->id,
-                $student->name,
-                $student->email,
-                $student->class_id,
-                $student->created_at,
-                $student->status
+                $id,
+                $name,
+                $email,
+                $class_id,
+                $created_at,
+                $status
             ));
         }
     }

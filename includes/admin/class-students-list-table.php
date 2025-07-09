@@ -328,6 +328,18 @@ class School_Manager_Lite_Students_List_Table extends WP_List_Table {
             case 'activate':
                 foreach ($student_ids as $student_id) {
                     update_user_meta($student_id, 'school_student_status', 'active');
+
+                    // Enroll student to LearnDash course(s) associated with their classes
+                    if (function_exists('ld_update_course_access')) {
+                        $student_classes = $student_manager->get_student_classes($student_id);
+                        foreach ($student_classes as $class) {
+                            $ld_course_id = 898; // default course ID fallback
+                            if (isset($class->course_id) && $class->course_id) {
+                                $ld_course_id = $class->course_id;
+                            }
+                            ld_update_course_access($student_id, $ld_course_id, $remove=false);
+                        }
+                    }
                 }
                 
                 add_settings_error(
@@ -341,6 +353,18 @@ class School_Manager_Lite_Students_List_Table extends WP_List_Table {
             case 'deactivate':
                 foreach ($student_ids as $student_id) {
                     update_user_meta($student_id, 'school_student_status', 'inactive');
+
+                    // Remove student access to LearnDash course(s)
+                    if (function_exists('ld_update_course_access')) {
+                        $student_classes = $student_manager->get_student_classes($student_id);
+                        foreach ($student_classes as $class) {
+                            $ld_course_id = 898;
+                            if (isset($class->course_id) && $class->course_id) {
+                                $ld_course_id = $class->course_id;
+                            }
+                            ld_update_course_access($student_id, $ld_course_id, $remove=true);
+                        }
+                    }
                 }
                 
                 add_settings_error(

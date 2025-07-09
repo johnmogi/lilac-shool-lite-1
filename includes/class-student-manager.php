@@ -311,6 +311,8 @@ class School_Manager_Lite_Student_Manager {
 
             // Save student ID meta on the WP user
             update_user_meta( $wp_user_id, '_school_student_id', $data['user_pass'] );
+            // Mark student as active by default
+            update_user_meta( $wp_user_id, 'school_student_status', 'active' );
         }
 
         // Insert into custom students table
@@ -320,8 +322,6 @@ class School_Manager_Lite_Student_Manager {
             'class_id'   => intval( $data['class_id'] ),
             'name'       => sanitize_text_field( $data['name'] ),
             'email'      => sanitize_email( $data['email'] ),
-            
-            
             'created_at' => current_time( 'mysql' ),
         );
 

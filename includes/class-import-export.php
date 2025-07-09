@@ -112,21 +112,20 @@ class School_Manager_Lite_Import_Export {
         
         // Data
         foreach ($teachers as $teacher) {
-            $user = get_userdata($teacher->wp_user_id);
+            // $teacher is a WP_User object
+            $first_name = get_user_meta($teacher->ID, 'first_name', true);
+            $last_name  = get_user_meta($teacher->ID, 'last_name', true);
             
-            // Skip if user data is not available
-            if (!$user) {
-                error_log(sprintf('Teacher with ID %d has invalid WordPress user ID: %d', $teacher->id, $teacher->wp_user_id));
-                continue;
-            }
+            // Determine status based on role presence (customize as needed)
+            $status = in_array('school_teacher', (array) $teacher->roles) ? 'active' : 'inactive';
             
             fputcsv($output, array(
-                $teacher->id,
-                $user->user_login ?: '',
-                $user->user_email ?: '',
-                $user->first_name ?: '',
-                $user->last_name ?: '',
-                $teacher->status ?: 'inactive'
+                $teacher->ID,
+                $teacher->user_login,
+                $teacher->user_email,
+                $first_name,
+                $last_name,
+                $status
             ));
         }
     }
@@ -277,7 +276,82 @@ class School_Manager_Lite_Import_Export {
     
     // Import methods for each type would be implemented here
     private function import_students($handle) { /* ... */ }
-    private function import_teachers($handle) { /* ... */ }
+    /**
+     * Import teachers from CSV
+     * Expected columns: ID, Username, Email, First Name, Last Name, Status
+     */
+    private function import_teachers($handle) {
+        if (!$handle) {
+            return;
+        }
+
+        $imported = 0;
+        $updated   = 0;
+        $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
+
+        while (($row = fgetcsv($handle)) !== false) {
+            // Skip empty rows
+            if (empty(array_filter($row))) {
+                continue;
+            }
+
+            // Map CSV columns to variables
+            list($id, $username, $email, $first_name, $last_name, $status) = array_pad($row, 6, '');
+
+            // Basic validation – require at least username (login) and names
+            if (empty($username) || empty($first_name) || empty($last_name)) {
+                // Skip invalid row
+                continue;
+            }
+
+            // Ensure we have an email – generate placeholder if not provided
+            if (empty($email)) {
+                $email = sanitize_user($username, true) . '@example.com';
+            }
+
+            // Check if user exists by username or email
+            $user = get_user_by('login', $username);
+            if (!$user) {
+                $user = get_user_by('email', $email);
+            }
+
+            $userdata = [
+                'user_login'   => $username,
+                'user_email'   => $email,
+                'first_name'   => $first_name,
+                'last_name'    => $last_name,
+                'display_name' => $first_name . ' ' . $last_name,
+                'role'         => 'school_teacher',
+            ];
+
+            if ($user) {
+                // Update existing user
+                $userdata['ID'] = $user->ID;
+                wp_update_user($userdata);
+                $updated++;
+            } else {
+                // Create new user with random password
+                $userdata['user_pass'] = wp_generate_password(12, true, true);
+                $new_id = wp_insert_user($userdata);
+                if (!is_wp_error($new_id)) {
+                    $imported++;
+                }
+            }
+        }
+
+        fclose($handle);
+
+        // Redirect with query args to show notice
+        $redirect_url = add_query_arg(array(
+            'page'      => 'school-manager-import-export',
+            'imported'  => 1,
+            'added'     => $imported,
+            'updated'   => $updated,
+        ), admin_url('admin.php'));
+
+        wp_redirect($redirect_url);
+        exit();
+    }
     private function import_classes($handle) { /* ... */ }
     private function import_promo_codes($handle) { /* ... */ }
 }

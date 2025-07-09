@@ -72,13 +72,16 @@ class School_Manager_Lite_Promo_Codes_List_Table extends WP_List_Table {
     public function column_default($item, $column_name) {
         switch ($column_name) {
             case 'discount':
-                if ($item->discount_type === 'percentage') {
+                // Handle missing discount_type gracefully
+                if (isset($item->discount_type) && $item->discount_type === 'percentage') {
                     return sprintf('%s%%', number_format($item->discount_amount, 0));
                 } else {
-                    return sprintf('%s%s', get_woocommerce_currency_symbol(), number_format($item->discount_amount, 2));
+                    // Fallback: if WooCommerce is not active, default to currency symbol '$'
+                    $currency_symbol = function_exists('get_woocommerce_currency_symbol') ? get_woocommerce_currency_symbol() : '$';
+                    return sprintf('%s%s', $currency_symbol, number_format($item->discount_amount, 2));
                 }
             case 'uses':
-                if ($item->usage_limit > 0) {
+                if (isset($item->usage_limit) && $item->usage_limit > 0) {
                     return sprintf('%d / %d', $item->used_count, $item->usage_limit);
                 } else {
                     return sprintf('%d / %s', $item->used_count, __('Unlimited', 'school-manager-lite'));

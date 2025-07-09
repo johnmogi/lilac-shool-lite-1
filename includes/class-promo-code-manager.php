@@ -633,13 +633,9 @@ class School_Manager_Lite_Promo_Code_Manager {
                 return new WP_Error('duplicate_student_id', __('A student with this ID already exists. Please use a different ID.', 'school-manager-lite'));
             }
             
-            // Double check in the student table
-            global $wpdb;
-            $student_table = $wpdb->prefix . 'school_students';
-            $student_exists = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$student_table} WHERE student_id = %s", $student_data['password']));
-            if ($student_exists && $student_exists > 0) {
-                return new WP_Error('duplicate_student_id', __('A student with this ID already exists. Please use a different ID.', 'school-manager-lite'));
-            }
+            // Additional duplicate check in custom student table is skipped because the table does not store a separate student_id column.
+            // Primary uniqueness is enforced via WP user meta above.
+
             
             // Phone number check can be skipped - student ID is the primary unique identifier
             

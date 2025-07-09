@@ -228,6 +228,116 @@ class School_Manager_Lite_Student_Manager {
         return true;
     }
     
+    /**
+     * Create a student and optionally the associated WP user.
+     * This is a simplified version restored to satisfy promo-code redemption.
+     *
+     * @param array $data
+     *        Required keys:
+     *          - name           : Student full name
+     *          - class_id       : Class ID to enroll to
+     *          - user_pass      : Student ID (password)
+     *          - user_login     : Username (phone number)
+     *        Optional keys:
+     *          - create_user    : bool, default true – create WP user too
+     *          - role           : WP role for the user (defaults student_private)
+     *          - email          : email address (optional)
+     *          - status         : active / inactive, defaults active
+     * @return int|WP_Error Student row ID on success or WP_Error on failure
+     */
+    public function create_student( $data ) {
+        global $wpdb;
+
+        // Defaults
+        $defaults = array(
+            'name'        => '',
+            'class_id'    => 0,
+            'user_pass'   => '',
+            'user_login'  => '',
+            'email'       => '',
+            'create_user' => true,
+            'role'        => 'student_private',
+            'status'      => 'active',
+        );
+        $data = wp_parse_args( $data, $defaults );
+
+        // Basic validation
+        if ( empty( $data['name'] ) ) {
+            return new WP_Error( 'missing_name', __( 'Student name is required', 'school-manager-lite' ) );
+        }
+        if ( empty( $data['class_id'] ) ) {
+            return new WP_Error( 'missing_class', __( 'Class ID is required', 'school-manager-lite' ) );
+        }
+        if ( empty( $data['user_login'] ) ) {
+            return new WP_Error( 'missing_username', __( 'Username (phone) is required', 'school-manager-lite' ) );
+        }
+        if ( empty( $data['user_pass'] ) ) {
+            return new WP_Error( 'missing_password', __( 'Student ID (password) is required', 'school-manager-lite' ) );
+        }
+
+        // Duplicate checks for WP user meta (student ID) and username
+        $existing_meta = get_users( array(
+            'meta_key'   => '_school_student_id',
+            'meta_value' => $data['user_pass'],
+            'number'     => 1,
+            'fields'     => 'ID',
+        ) );
+        if ( ! empty( $existing_meta ) ) {
+            return new WP_Error( 'duplicate_student_id', __( 'A student with this ID already exists', 'school-manager-lite' ) );
+        }
+        if ( username_exists( $data['user_login'] ) ) {
+            return new WP_Error( 'duplicate_username', __( 'This phone number is already registered', 'school-manager-lite' ) );
+        }
+
+        $wp_user_id = 0;
+        if ( $data['create_user'] ) {
+            // Ensure student role exists
+            $this->ensure_student_role_exists();
+
+            $user_data = array(
+                'user_login'   => $data['user_login'],
+                'user_pass'    => $data['user_pass'],
+                'display_name' => $data['name'],
+                'role'         => $data['role'],
+            );
+            if ( ! empty( $data['email'] ) && is_email( $data['email'] ) ) {
+                $user_data['user_email'] = $data['email'];
+            }
+
+            $wp_user_id = wp_insert_user( $user_data );
+            if ( is_wp_error( $wp_user_id ) ) {
+                return $wp_user_id; // Propagate error
+            }
+
+            // Save student ID meta on the WP user
+            update_user_meta( $wp_user_id, '_school_student_id', $data['user_pass'] );
+        }
+
+        // Insert into custom students table
+        $table_name = $wpdb->prefix . 'school_students';
+        $insert_data = array(
+            'wp_user_id' => intval( $wp_user_id ),
+            'class_id'   => intval( $data['class_id'] ),
+            'name'       => sanitize_text_field( $data['name'] ),
+            'email'      => sanitize_email( $data['email'] ),
+            
+            
+            'created_at' => current_time( 'mysql' ),
+        );
+
+        $result = $wpdb->insert( $table_name, $insert_data, array( '%d', '%d', '%s', '%s', '%s' ) );
+        if ( false === $result ) {
+            // Rollback: remove WP user if we created one
+            if ( $wp_user_id ) {
+                require_once ABSPATH . 'wp-admin/includes/user.php';
+                wp_delete_user( $wp_user_id );
+            }
+            return new WP_Error( 'db_error', __( 'Could not insert student', 'school-manager-lite' ) );
+        }
+
+        return intval( $wpdb->insert_id );
+    }
+
     // Other methods will be added here...
     
     /**

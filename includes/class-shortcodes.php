@@ -193,7 +193,8 @@ class School_Manager_Lite_Shortcodes {
      */
     public function ajax_redeem_promo_code() {
         // Check nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'school-promo-code-redemption')) {
+        $nonce_value = isset($_POST['school_promo_nonce']) ? $_POST['school_promo_nonce'] : ( isset($_POST['nonce']) ? $_POST['nonce'] : '' );
+        if ( empty( $nonce_value ) || ( ! wp_verify_nonce( $nonce_value, 'school_redeem_promo_code' ) && ! wp_verify_nonce( $nonce_value, 'school-promo-code-redemption' ) ) ) {
             wp_send_json_error(array('message' => __('Security check failed. Please refresh the page and try again.', 'school-manager-lite')));
         }
         

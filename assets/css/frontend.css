@@ -1,0 +1,122 @@
+/**
+ * School Manager Lite Frontend Styles
+ */
+
+/* Promo Code Redemption Form */
+.school-promo-redemption {
+    max-width: 600px;
+    margin: 20px auto;
+    padding: 20px;
+    background: #f9f9f9;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.school-promo-title {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.school-promo-form .school-form-group {
+    margin-bottom: 15px;
+}
+
+.school-promo-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.school-form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 16px;
+}
+
+.school-form-control:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+
+.school-form-submit {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.school-button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.school-button:hover {
+    background: #0069d9;
+}
+
+.school-button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+}
+
+.school-loading {
+    display: inline-block;
+    margin-left: 10px;
+    font-style: italic;
+    color: #666;
+}
+
+.school-message-container {
+    margin-top: 15px;
+}
+
+.school-success {
+    padding: 10px;
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+    border-radius: 4px;
+}
+
+.school-error {
+    padding: 10px;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 480px) {
+    .school-promo-redemption {
+        padding: 15px;
+        margin: 10px;
+    }
+    
+    .school-promo-title {
+        font-size: 20px;
+    }
+    
+    .school-button {
+        width: 100%;
+    }
+    
+    .school-loading {
+        display: block;
+        margin-top: 10px;
+        margin-left: 0;
+        text-align: center;
+    }
+}

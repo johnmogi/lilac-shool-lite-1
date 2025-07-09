@@ -470,7 +470,7 @@ class School_Manager_Lite_Promo_Code_Manager {
                 'prefix' => $data['prefix'],
                 'class_id' => $data['class_id'],
                 'teacher_id' => $data['teacher_id'],
-                'expiry_date' => $data['expiry_date'],
+                'expiry_date' => $this->normalize_expiry_date($data['expiry_date']),
             ));
             
             if (!is_wp_error($promo_id)) {

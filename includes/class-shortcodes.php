@@ -142,9 +142,9 @@ class School_Manager_Lite_Shortcodes {
         // Start output buffering
         ob_start();
         
-        // Form HTML
+        // Form HTML with inline styles as fallback
         ?>
-        <div class="<?php echo esc_attr($atts['class']); ?>">
+        <div class="<?php echo esc_attr($atts['class']); ?>" style="max-width: 600px; margin: 20px auto; padding: 20px; background: #f9f9f9; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
             <?php if (!empty($atts['title'])) : ?>
             <h3 class="school-promo-title"><?php echo esc_html($atts['title']); ?></h3>
             <?php endif; ?>
@@ -152,34 +152,34 @@ class School_Manager_Lite_Shortcodes {
             <?php echo $message; ?>
             
             <form id="school-promo-form" class="school-promo-form" method="post">
-                <div class="school-form-group">
-                    <label for="promo_code"><?php _e('הזן קוד קופון:', 'school-manager-lite'); ?></label>
-                    <input type="text" name="promo_code" id="promo_code" class="school-form-control" placeholder="<?php _e('קוד קופון', 'school-manager-lite'); ?>" required>
+                <div class="school-form-group" style="margin-bottom: 15px;">
+                    <label for="promo_code" style="display: block; margin-bottom: 5px; font-weight: 500;"><?php _e('הזן קוד קופון:', 'school-manager-lite'); ?></label>
+                    <input type="text" name="promo_code" id="promo_code" class="school-form-control" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 16px;" placeholder="<?php _e('קוד קופון', 'school-manager-lite'); ?>" required>
                 </div>
                 
-                <div class="school-form-group">
+                <div class="school-form-group" style="margin-bottom: 15px;">
                     <label for="student_name"><?php _e('שם מלא:', 'school-manager-lite'); ?></label>
-                    <input type="text" name="student_name" id="student_name" class="school-form-control" placeholder="<?php _e('שם מלא', 'school-manager-lite'); ?>" required>
+                    <input type="text" name="student_name" id="student_name" class="school-form-control" placeholder="<?php _e('שם', 'school-manager-lite'); ?>" required>
                 </div>
                 
-                <div class="school-form-group">
+                <div class="school-form-group" style="margin-bottom: 15px;">
                     <label for="student_phone"><?php _e('מספר טלפון:', 'school-manager-lite'); ?></label>
-                    <input type="text" name="student_phone" id="student_phone" class="school-form-control" placeholder="<?php _e('מספר טלפון (שם משתמש)', 'school-manager-lite'); ?>" required>
+                    <input type="text" name="student_phone" id="student_phone" class="school-form-control" placeholder="<?php _e('טלפון', 'school-manager-lite'); ?>" required>
                 </div>
                 
-                <div class="school-form-group">
+                <div class="school-form-group" style="margin-bottom: 15px;">
                     <label for="student_id"><?php _e('תעודת זהות:', 'school-manager-lite'); ?></label>
-                    <input type="text" name="student_id" id="student_id" class="school-form-control" placeholder="<?php _e('תעודת זהות (סיסמה)', 'school-manager-lite'); ?>" required>
+                    <input type="text" name="student_id" id="student_id" class="school-form-control" placeholder="<?php _e('ת.ז', 'school-manager-lite'); ?>" required>
                 </div>
                 
-                <div class="school-form-submit">
+                <div class="school-form-submit" style="margin-top: 20px; text-align: center;">
                     <?php wp_nonce_field('school_redeem_promo_code', 'school_promo_nonce'); ?>
                     <input type="hidden" name="action" value="school_redeem_promo_code">
-                    <button type="submit" class="school-button" id="school-redeem-button"><?php echo esc_html($atts['button_text']); ?></button>
-                    <span class="school-loading" style="display:none;"><?php _e('Processing...', 'school-manager-lite'); ?></span>
+                    <button type="submit" class="school-button" id="school-redeem-button" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background 0.3s;"><?php echo esc_html($atts['button_text']); ?></button>
+                    <span class="school-loading" style="display:none; margin-left: 10px; font-style: italic; color: #666;"><?php _e('Processing...', 'school-manager-lite'); ?></span>
                 </div>
                 
-                <div class="school-message-container"></div>
+                <div class="school-message-container" style="margin-top: 15px;"></div>
             </form>
         </div>
         <?php

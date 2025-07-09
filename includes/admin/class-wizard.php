@@ -54,27 +54,27 @@ class School_Manager_Lite_Admin_Wizard {
         // Define steps
         $this->steps = array(
             'welcome'    => array(
-                'name'    => __('Welcome', 'school-manager-lite'),
+                'name'    => __('ברוכים הבאים', 'school-manager-lite'),
                 'view'     => array($this, 'welcome_step'),
                 'handler'  => array($this, 'welcome_handler'),
             ),
             'teacher'    => array(
-                'name'    => __('Teacher', 'school-manager-lite'),
+                'name'    => __('מורה', 'school-manager-lite'),
                 'view'     => array($this, 'teacher_step'),
                 'handler'  => array($this, 'teacher_handler'),
             ),
             'class'      => array(
-                'name'    => __('Class', 'school-manager-lite'),
+                'name'    => __('כיתה', 'school-manager-lite'),
                 'view'     => array($this, 'class_step'),
                 'handler'  => array($this, 'class_handler'),
             ),
             'promo_code' => array(
-                'name'    => __('Promo Code', 'school-manager-lite'),
+                'name'    => __('קוד קופון', 'school-manager-lite'),
                 'view'     => array($this, 'promo_code_step'),
                 'handler'  => array($this, 'promo_code_handler'),
             ),
             'done'       => array(
-                'name'    => __('Done', 'school-manager-lite'),
+                'name'    => __('סיום', 'school-manager-lite'),
                 'view'     => array($this, 'done_step'),
                 'handler'  => '',
             ),
@@ -91,8 +91,8 @@ class School_Manager_Lite_Admin_Wizard {
     public function admin_menu() {
         add_submenu_page(
             'school-manager-lite',
-            __('Setup Wizard', 'school-manager-lite'),
-            __('Setup Wizard', 'school-manager-lite'),
+            __('אשף התקנה', 'school-manager-lite'),
+            __('אשף התקנה', 'school-manager-lite'),
             'manage_options',
             'school-manager-wizard',
             array($this, 'wizard_page')
@@ -138,7 +138,7 @@ class School_Manager_Lite_Admin_Wizard {
         <head>
             <meta name="viewport" content="width=device-width" />
             <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-            <title><?php _e('School Manager &rsaquo; Setup Wizard', 'school-manager-lite'); ?></title>
+            <title><?php _e('ניהול בית ספר &rsaquo; אשף התקנה', 'school-manager-lite'); ?></title>
             <?php wp_print_scripts('jquery'); ?>
             <?php do_action('admin_print_styles'); ?>
             <?php do_action('admin_head'); ?>
@@ -146,7 +146,8 @@ class School_Manager_Lite_Admin_Wizard {
                 .school-manager-wizard-wrap {
                     max-width: 800px;
                     margin: 2em auto;
-                    text-align: center;
+                    text-align: right;
+                    direction: rtl;
                     background: #fff;
                     padding: 2em;
                     box-shadow: 0 1px 3px rgba(0,0,0,.13);
@@ -178,14 +179,15 @@ class School_Manager_Lite_Admin_Wizard {
                     margin-bottom: 2em;
                 }
                 .school-manager-wizard-content form {
-                    text-align: left;
+                    text-align: right;
                 }
                 .school-manager-wizard-content .form-table th {
                     width: 30%;
-                    padding: 15px 10px 15px 0;
+                    padding: 15px 0 15px 10px;
+                    text-align: right;
                 }
                 .school-manager-wizard-buttons {
-                    text-align: right;
+                    text-align: left;
                     margin-top: 20px;
                 }
                 .school-manager-wizard-buttons .button-primary {
@@ -194,8 +196,8 @@ class School_Manager_Lite_Admin_Wizard {
             </style>
         </head>
         <body class="wp-core-ui">
-            <div class="school-manager-wizard-wrap">
-                <h1><?php _e('School Manager Setup Wizard', 'school-manager-lite'); ?></h1>
+            <div class="school-manager-wizard-wrap" style="direction: rtl;">
+                <h1><?php _e('אשף התקנת ניהול בית ספר', 'school-manager-lite'); ?></h1>
         <?php
     }
     
@@ -213,7 +215,7 @@ class School_Manager_Lite_Admin_Wizard {
      * Display wizard steps.
      */
     public function wizard_steps() {
-        ?>  <ol class="school-manager-wizard-steps">
+        ?>  <ol class="school-manager-wizard-steps" style="direction: rtl;">
                 <?php foreach ($this->steps as $step_key => $step) : ?>
                     <li class="<?php echo $step_key === $this->current_step ? 'active' : ''; ?>">
                         <?php echo esc_html($step['name']); ?>
@@ -263,15 +265,15 @@ class School_Manager_Lite_Admin_Wizard {
      * Welcome step view.
      */
     public function welcome_step() {
-        ?>  <h2><?php _e('Welcome to School Manager Lite!', 'school-manager-lite'); ?></h2>
-            <p><?php _e('This wizard will help you set up your school management system quickly and easily.', 'school-manager-lite'); ?></p>
-            <p><?php _e('You will be able to add teachers, create classes, and generate promo codes for student enrollment.', 'school-manager-lite'); ?></p>
+        ?>  <h2><?php _e('ברוכים הבאים למערכת ניהול בית ספר!', 'school-manager-lite'); ?></h2>
+            <p><?php _e('אשף זה יעזור לך להגדיר את מערכת ניהול בית הספר שלך במהירות ובקלות.', 'school-manager-lite'); ?></p>
+            <p><?php _e('תוכל להוסיף מורים, ליצור כיתות וליצור קודי קופון לרישום תלמידים.', 'school-manager-lite'); ?></p>
             
             <form method="post">
                 <?php wp_nonce_field('school_manager_wizard', 'school_manager_wizard_nonce'); ?>
                 <div class="school-manager-wizard-buttons">
-                    <a href="<?php echo admin_url('admin.php?page=school-manager-lite'); ?>" class="button"><?php _e('Skip Setup', 'school-manager-lite'); ?></a>
-                    <button class="button-primary" type="submit"><?php _e('Start Setup', 'school-manager-lite'); ?></button>
+                    <a href="<?php echo admin_url('admin.php?page=school-manager-lite'); ?>" class="button"><?php _e('דלג על ההתקנה', 'school-manager-lite'); ?></a>
+                    <button class="button-primary" type="submit"><?php _e('התחל התקנה', 'school-manager-lite'); ?></button>
                 </div>
             </form>
         <?php
@@ -303,16 +305,16 @@ class School_Manager_Lite_Admin_Wizard {
         // Check for error messages
         $error = isset($_GET['error']) ? sanitize_text_field($_GET['error']) : '';
         
-        ?>  <h2><?php _e('Set Up Teacher', 'school-manager-lite'); ?></h2>
-            <p><?php _e('Select an existing user to make them a teacher or create a new teacher account.', 'school-manager-lite'); ?></p>
+        ?>  <h2><?php _e('הגדרת מורה', 'school-manager-lite'); ?></h2>
+            <p><?php _e('בחר משתמש קיים כדי להפוך אותו למורה או צור חשבון מורה חדש.', 'school-manager-lite'); ?></p>
             
             <?php if ($error === 'no_selection') : ?>
                 <div class="notice notice-error">
-                    <p><?php _e('Please select an existing user or create a new teacher.', 'school-manager-lite'); ?></p>
+                    <p><?php _e('אנא בחר משתמש קיים או צור מורה חדש.', 'school-manager-lite'); ?></p>
                 </div>
             <?php elseif ($error === 'creation_failed') : ?>
                 <div class="notice notice-error">
-                    <p><?php _e('There was a problem creating or assigning the teacher role. Please try again.', 'school-manager-lite'); ?></p>
+                    <p><?php _e('אירעה שגיאה ביצירת או הקצאת תפקיד המורה. אנא נסה שוב.', 'school-manager-lite'); ?></p>
                 </div>
             <?php endif; ?>
             
@@ -321,25 +323,25 @@ class School_Manager_Lite_Admin_Wizard {
                 
                 <div class="tablenav top">
                     <div class="alignleft actions">
-                        <?php $teachers_table->search_box(__('Search Users', 'school-manager-lite'), 'search-teachers'); ?>
+                        <?php $teachers_table->search_box(__('חפש משתמשים', 'school-manager-lite'), 'search-teachers'); ?>
                     </div>
                     <br class="clear">
                 </div>
                 
-                <h3><?php _e('Select Existing User', 'school-manager-lite'); ?></h3>
+                <h3><?php _e('בחר משתמש קיים', 'school-manager-lite'); ?></h3>
                 
                 <?php $teachers_table->display(); ?>
                 
-                <h3><?php _e('Or Create New Teacher', 'school-manager-lite'); ?></h3>
+                <h3><?php _e('או צור מורה חדש', 'school-manager-lite'); ?></h3>
                 <table class="form-table">
                     <tr>
-                        <th><label for="teacher_name"><?php _e('Name', 'school-manager-lite'); ?></label></th>
+                        <th><label for="teacher_name"><?php _e('שם מלא', 'school-manager-lite'); ?></label></th>
                         <td>
                             <input type="text" id="teacher_name" name="teacher_name" class="regular-text">
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="teacher_email"><?php _e('Email', 'school-manager-lite'); ?></label></th>
+                        <th><label for="teacher_email"><?php _e('אימייל', 'school-manager-lite'); ?></label></th>
                         <td>
                             <input type="email" id="teacher_email" name="teacher_email" class="regular-text">
                         </td>
@@ -347,8 +349,8 @@ class School_Manager_Lite_Admin_Wizard {
                 </table>
                 
                 <div class="school-manager-wizard-buttons">
-                    <a href="<?php echo admin_url('admin.php?page=school-manager-lite'); ?>" class="button"><?php _e('Cancel', 'school-manager-lite'); ?></a>
-                    <input type="submit" class="button-primary" value="<?php _e('Continue', 'school-manager-lite'); ?>" name="save_step">
+                    <a href="<?php echo admin_url('admin.php?page=school-manager-lite'); ?>" class="button"><?php _e('ביטול', 'school-manager-lite'); ?></a>
+                    <input type="submit" class="button-primary" value="<?php _e('המשך', 'school-manager-lite'); ?>" name="save_step">
                 </div>
             </form>
             
@@ -438,94 +440,94 @@ class School_Manager_Lite_Admin_Wizard {
         // Create an instance of our classes list table
         $classes_table = new School_Manager_Lite_Wizard_Classes_List_Table($teacher_id);
         
-        // Process actions and prepare the table items
         $classes_table->prepare_items();
         
         // Check for error messages
         $error = isset($_GET['error']) ? sanitize_text_field($_GET['error']) : '';
         
-        ?>  <h2><?php _e('Class Selection', 'school-manager-lite'); ?></h2>
-            <p>
-                <?php 
-                if ($teacher_name) {
-                    printf(__('Create a new class or select an existing class for teacher: %s', 'school-manager-lite'), '<strong>' . esc_html($teacher_name) . '</strong>'); 
-                } else {
-                    _e('Create a new class or select an existing one.', 'school-manager-lite');
-                }
-                ?>
-            </p>
+        ?>
+        <h2><?php _e('בחירת כיתה', 'school-manager-lite'); ?></h2>
+        <p>
+            <?php 
+            if ($teacher_name) {
+                printf(__('צור כיתה חדשה או בחר כיתה קיימת למורה: %s', 'school-manager-lite'), '<strong>' . esc_html($teacher_name) . '</strong>'); 
+            } else {
+                _e('צור כיתה חדשה או בחר כיתה קיימת.', 'school-manager-lite');
+            }
+            ?>
+        </p>
+        
+        <?php if ($error === 'no_selection') : ?>
+            <div class="notice notice-error">
+                <p><?php _e('אנא בחר כיתה קיימת או צור כיתה חדשה.', 'school-manager-lite'); ?></p>
+            </div>
+        <?php elseif ($error === 'creation_failed') : ?>
+            <div class="notice notice-error">
+                <p><?php _e('אירעה שגיאה ביצירה או עדכון הכיתה. אנא נסה שוב.', 'school-manager-lite'); ?></p>
+            </div>
+        <?php endif; ?>
+        
+        <form method="post">
+            <?php wp_nonce_field('school_manager_wizard', 'school_manager_wizard_nonce'); ?>
+            <input type="hidden" name="teacher_id" value="<?php echo esc_attr($teacher_id); ?>">
             
-            <?php if ($error === 'no_selection') : ?>
-                <div class="notice notice-error">
-                    <p><?php _e('Please select an existing class or create a new one.', 'school-manager-lite'); ?></p>
+            <div class="tablenav top">
+                <div class="alignleft actions">
+                    <?php $classes_table->search_box(__('חפש כיתות', 'school-manager-lite'), 'search-classes'); ?>
                 </div>
-            <?php elseif ($error === 'creation_failed') : ?>
-                <div class="notice notice-error">
-                    <p><?php _e('There was a problem creating or updating the class. Please try again.', 'school-manager-lite'); ?></p>
-                </div>
-            <?php endif; ?>
+                <br class="clear">
+            </div>
             
-            <form method="post">
-                <?php wp_nonce_field('school_manager_wizard', 'school_manager_wizard_nonce'); ?>
-                <input type="hidden" name="teacher_id" value="<?php echo esc_attr($teacher_id); ?>">
-                
-                <div class="tablenav top">
-                    <div class="alignleft actions">
-                        <?php $classes_table->search_box(__('Search Classes', 'school-manager-lite'), 'search-classes'); ?>
-                    </div>
-                    <br class="clear">
-                </div>
-                
-                <h3><?php _e('Select Existing Class', 'school-manager-lite'); ?></h3>
-                
-                <?php $classes_table->display(); ?>
-                
-                <h3><?php _e('Or Create New Class', 'school-manager-lite'); ?></h3>
-                <table class="form-table">
-                    <tr>
-                        <th><label for="class_name"><?php _e('Class Name', 'school-manager-lite'); ?></label></th>
-                        <td>
-                            <input type="text" id="class_name" name="class_name" class="regular-text">
-                        </td>
-                    </tr>
-                    <tr>
-                        <th><label for="class_description"><?php _e('Description', 'school-manager-lite'); ?></label></th>
-                        <td>
-                            <textarea id="class_description" name="class_description" class="large-text" rows="5"></textarea>
-                        </td>
-                    </tr>
-                </table>
-                
-                <div class="school-manager-wizard-buttons">
-                    <a href="<?php echo admin_url('admin.php?page=school-manager-wizard&step=teacher'); ?>" class="button"><?php _e('Back', 'school-manager-lite'); ?></a>
-                    <input type="submit" class="button-primary" value="<?php _e('Continue', 'school-manager-lite'); ?>" name="save_step">
-                </div>
-            </form>
+            <h3><?php _e('בחר כיתה קיימת', 'school-manager-lite'); ?></h3>
             
-            <script type="text/javascript">
-                jQuery(document).ready(function($) {
-                    // Highlight selected row
-                    $('input[name="class_id"]').change(function() {
-                        $('.wp-list-table tr').removeClass('selected');
-                        $(this).closest('tr').addClass('selected');
-                        
-                        // Clear the create new class form when an existing class is selected
-                        if($(this).is(':checked')) {
-                            $('#class_name').val('');
-                            $('#class_description').val('');
-                        }
-                    });
+            <?php $classes_table->display(); ?>
+            
+            <h3><?php _e('או צור כיתה חדשה', 'school-manager-lite'); ?></h3>
+            <table class="form-table">
+                <tr>
+                    <th><label for="class_name"><?php _e('שם הכיתה', 'school-manager-lite'); ?></label></th>
+                    <td>
+                        <input type="text" id="class_name" name="class_name" class="regular-text">
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="class_description"><?php _e('תיאור', 'school-manager-lite'); ?></label></th>
+                    <td>
+                        <textarea id="class_description" name="class_description" class="large-text" rows="5"></textarea>
+                    </td>
+                </tr>
+            </table>
+            
+            <div class="school-manager-wizard-buttons">
+                <a href="<?php echo admin_url('admin.php?page=school-manager-wizard&step=teacher'); ?>" class="button"><?php _e('חזור', 'school-manager-lite'); ?></a>
+                <input type="submit" class="button-primary" value="<?php _e('המשך', 'school-manager-lite'); ?>" name="save_step">
+            </div>
+        </form>
+        
+        <script type="text/javascript">
+            jQuery(document).ready(function($) {
+                // Highlight selected row
+                $('input[name="class_id"]').change(function() {
+                    $('.wp-list-table tr').removeClass('selected');
+                    $(this).closest('tr').addClass('selected');
                     
-                    // Clear selection if user starts typing in the new class form
-                    $('#class_name, #class_description').on('input', function() {
-                        $('input[name="class_id"]').prop('checked', false);
-                        $('.wp-list-table tr').removeClass('selected');
-                    });
-                    
-                    // Style selected row
-                    $('<style>.wp-list-table tr.selected { background-color: #f7fcfe; }</style>').appendTo('head');
+                    // Clear the create new class form when an existing class is selected
+                    if($(this).is(':checked')) {
+                        $('#class_name').val('');
+                        $('#class_description').val('');
+                    }
                 });
-            </script>
+                
+                // Clear selection if user starts typing in the new class form
+                $('#class_name, #class_description').on('input', function() {
+                    $('input[name="class_id"]').prop('checked', false);
+                    $('.wp-list-table tr').removeClass('selected');
+                });
+                
+                // Style selected row
+                $('<style>.wp-list-table tr.selected { background-color: #f7fcfe; }</style>').appendTo('head');
+            });
+        </script>
         <?php
     }
     

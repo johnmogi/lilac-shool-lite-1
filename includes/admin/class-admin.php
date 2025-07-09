@@ -117,7 +117,7 @@ class School_Manager_Lite_Admin {
             'school-manager',
             __('Promo Codes', 'school-manager-lite'),
             __('Promo Codes', 'school-manager-lite'),
-            'manage_options',
+            'access_school_content',
             'school-manager-promo-codes',
             array($this, 'render_promo_codes_page')
         );
@@ -126,7 +126,7 @@ class School_Manager_Lite_Admin {
             'school-manager',
             __('Generate Promo Codes', 'school-manager-lite'),
             __('Generate Codes', 'school-manager-lite'),
-            'manage_options',
+            'access_school_content',
             'school-manager-promo-generate',
             array($this, 'render_promo_generate_page')
         );

@@ -687,11 +687,10 @@ class School_Manager_Lite_Promo_Code_Manager {
                 array(
                     'student_id' => $student_id,
                     'used_count' => 1,
-                    'used_at' => current_time('mysql'),
-                    'status' => 'used'
+                    'used_at' => current_time('mysql')
                 ),
                 array('id' => $promo->id),
-                array('%d', '%d', '%s', '%s'),
+                array('%d', '%d', '%s'),
                 array('%d')
             );
             
@@ -705,6 +704,13 @@ class School_Manager_Lite_Promo_Code_Manager {
         $class_manager = School_Manager_Lite_Class_Manager::instance();
         $class = $class_manager->get_class($promo->class_id);
         
+        // Auto-login the user if possible
+        $student_row = $student_manager->get_student( $student_id );
+        if ( $student_row && ! empty( $student_row->wp_user_id ) ) {
+            wp_set_current_user( $student_row->wp_user_id );
+            wp_set_auth_cookie( $student_row->wp_user_id );
+        }
+
         // Enroll the student into the LearnDash course (default 898 or class-specific)
         $ld_course_id = 898;
         if ($class && isset($class->course_id) && $class->course_id) {

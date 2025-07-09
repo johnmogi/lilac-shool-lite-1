@@ -411,7 +411,7 @@ class School_Manager_Lite_Student_Manager {
         
         // WordPress user query arguments
         $user_query_args = array(
-            'role' => 'student_private',
+            'role__in' => array('student_private','student_school'),
             'orderby' => $args['orderby'],
             'order' => $args['order']
         );

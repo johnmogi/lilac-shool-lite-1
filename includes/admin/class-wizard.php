@@ -84,7 +84,7 @@ class School_Manager_Lite_Admin_Wizard {
         add_action('admin_menu', array($this, 'admin_menu'), 20);
         add_action('admin_init', array($this, 'wizard_handler'), 10);
     }
-    
+
     /**
      * Add admin menus/screens.
      */

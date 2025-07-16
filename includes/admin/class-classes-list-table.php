@@ -39,11 +39,11 @@ class School_Manager_Lite_Classes_List_Table extends WP_List_Table {
     public function get_columns() {
         $columns = array(
             'cb'            => '<input type="checkbox" />',
-            'name'          => __('Class Name', 'school-manager-lite'),
-            'description'   => __('Description', 'school-manager-lite'),
-            'teacher'       => __('Teacher', 'school-manager-lite'),
-            'students'      => __('Students', 'school-manager-lite'),
-            'date_created'  => __('Created', 'school-manager-lite')
+            'name'          => __('Class Name', 'school-manager-lite') . ' / <span lang="he" dir="rtl">שם הכיתה</span>',
+            'description'   => __('Description', 'school-manager-lite') . ' / <span lang="he" dir="rtl">תיאור</span>',
+            'teacher'       => __('Teacher', 'school-manager-lite') . ' / <span lang="he" dir="rtl">מורה</span>',
+            'students'      => __('Students', 'school-manager-lite') . ' / <span lang="he" dir="rtl">תלמידים</span>',
+            'date_created'  => __('Created', 'school-manager-lite') . ' / <span lang="he" dir="rtl">נוצר</span>'
         );
 
         return $columns;
@@ -96,6 +96,11 @@ class School_Manager_Lite_Classes_List_Table extends WP_List_Table {
                 admin_url('admin.php?page=school-manager-classes&action=edit&id=' . $item->id),
                 __('Edit', 'school-manager-lite')
             ),
+            'assign-teacher' => sprintf(
+                '<a href="#" class="assign-teacher" data-class-id="%s">%s</a>',
+                $item->id,
+                __('Assign Teacher', 'school-manager-lite')
+            ),
             'delete' => sprintf(
                 '<a href="%s" class="submitdelete" onclick="return confirm(\'%s\');">%s</a>',
                 wp_nonce_url(admin_url('admin.php?page=school-manager-classes&action=delete&id=' . $item->id), 'delete_class_' . $item->id),
@@ -116,20 +121,33 @@ class School_Manager_Lite_Classes_List_Table extends WP_List_Table {
      * Column teacher
      */
     public function column_teacher($item) {
-        if (empty($item->teacher_id)) {
-            return '—';
+        $teacher_id = $item->teacher_id;
+        if (!$teacher_id) {
+            return '<em>' . __('No teacher assigned', 'school-manager-lite') . ' / <span lang="he" dir="rtl">אין מורה מוקצה</span></em>';
         }
 
-        $teacher = get_user_by('id', $item->teacher_id);
-        if ($teacher) {
-            return sprintf(
-                '<a href="%s">%s</a>',
-                admin_url('user-edit.php?user_id=' . $teacher->ID),
-                esc_html($teacher->display_name)
-            );
+        $teacher = get_user_by('id', $teacher_id);
+        if (!$teacher) {
+            return '<em>' . __('Teacher not found', 'school-manager-lite') . ' / <span lang="he" dir="rtl">המורה לא נמצא</span></em>';
         }
-
-        return __('Unknown Teacher', 'school-manager-lite');
+        
+        $output = '<div class="teacher-info">';
+        $output .= '<strong>' . esc_html($teacher->display_name) . '</strong>';
+        
+        // Add teacher specialty if available
+        $specialty = get_user_meta($teacher_id, 'teacher_specialty', true);
+        if (!empty($specialty)) {
+            $output .= '<br><span class="teacher-specialty">' . esc_html($specialty) . '</span>';
+        }
+        
+        // Add teacher phone if available
+        $phone = get_user_meta($teacher_id, 'teacher_phone', true);
+        if (!empty($phone)) {
+            $output .= '<br><span class="teacher-phone">' . esc_html($phone) . '</span>';
+        }
+        
+        $output .= '</div>';
+        return $output;
     }
 
     /**
@@ -193,6 +211,23 @@ class School_Manager_Lite_Classes_List_Table extends WP_List_Table {
         }
     }
 
+    /**
+     * Get CSS classes for the row
+     */
+    protected function get_table_classes() {
+        return array('widefat', 'striped', 'school-manager-classes-table');
+    }
+    
+    /**
+     * Add custom row attributes to identify each class row
+     */
+    public function single_row($item) {
+        $class = 'class-row-' . $item->id;
+        echo '<tr class="' . esc_attr($class) . '">';
+        $this->single_row_columns($item);
+        echo '</tr>';
+    }
+    
     /**
      * Prepare items
      */

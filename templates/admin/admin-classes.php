@@ -79,6 +79,11 @@ $classes_table->prepare_items();
     </form>
 </div>
 
+<?php
+// Include the teacher assignment modal at the end of the page
+require_once SCHOOL_MANAGER_LITE_DIR . 'templates/admin/modals/teacher-assignment-modal.php';
+?>
+
 <script type="text/javascript">
     jQuery(document).ready(function($) {
         // Show/hide the add class form
@@ -86,11 +91,15 @@ $classes_table->prepare_items();
             e.preventDefault();
             $('#add-class-form').slideToggle();
         });
-        
-        // Hide the form on cancel
+
+        // Cancel add class form
         $('#cancel-add-class').on('click', function(e) {
             e.preventDefault();
             $('#add-class-form').slideUp();
         });
     });
 </script>
+
+<?php
+// Script enqueuing is handled in the admin class via the admin_enqueue_scripts hook
+?>

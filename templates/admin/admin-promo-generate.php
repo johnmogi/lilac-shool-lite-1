@@ -38,14 +38,13 @@ if (isset($_POST['generate_promo_codes'])) {
         echo '<div class="notice notice-error"><p>' . esc_html($result->get_error_message()) . '</p></div>';
     } else {
         echo '<div class="notice notice-success"><p>';
-        printf(__('‎%1$s קופונים נוצרו בהצלחה.', 'school-manager-lite'), number_format_i18n(count($result)));
-        echo '</p></div>';
+        printf(__('‎%1$s קודי הטבה נוצרו בהצלחה.', 'school-manager-lite'), number_format_i18n(count($result)));         echo '</p></div>';
     }
 }
 
 ?>
 <div class="wrap school-manager-admin">
-    <h1 class="wp-heading-inline"><?php _e('‏יצירת קופונים', 'school-manager-lite'); ?></h1>
+    <h1 class="wp-heading-inline"><?php _e('יצירת קודי הטבה', 'school-manager-lite'); ?></h1> 
 
     <form method="post" class="promo-generator-form">
         <?php wp_nonce_field('school_manager_generate_promo_codes', 'school_manager_nonce'); ?>
@@ -97,7 +96,6 @@ if (isset($_POST['generate_promo_codes'])) {
             </tbody>
         </table>
         <p class="submit">
-            <input type="submit" name="generate_promo_codes" class="button-primary" value="<?php _e('‏צור קופונים', 'school-manager-lite'); ?>">
-        </p>
+            <input type="submit" name="generate_promo_codes" class="button-primary" value="<?php _e('‏צור קודי הטבה, 'school-manager-lite'); ?>">         </p>
     </form>
 </div>

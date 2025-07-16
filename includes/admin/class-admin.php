@@ -19,6 +19,13 @@ class School_Manager_Lite_Admin {
     private static $instance = null;
 
     /**
+     * Admin notices instance
+     *
+     * @var School_Manager_Lite_Admin_Notices|null
+     */
+    protected $notices = null;
+
+    /**
      * Main Instance.
      */
     public static function instance() {
@@ -43,7 +50,11 @@ class School_Manager_Lite_Admin {
         
         // Admin AJAX handlers
         add_action('wp_ajax_download_sample_csv', array($this, 'handle_download_sample_csv'));
-        add_action('wp_ajax_quick_edit_student', array($this, 'handle_quick_edit_student'));
+        add_action('wp_ajax_add_class_to_student', array($this, 'ajax_assign_class_to_student'));
+        add_action('wp_ajax_bulk_assign_teacher', array($this, 'ajax_bulk_assign_teacher'));
+        add_action('wp_ajax_bulk_assign_students', array($this, 'ajax_bulk_assign_students'));
+        add_action('wp_ajax_assign_promo_to_student', array($this, 'ajax_assign_promo_to_student'));
+        add_action('wp_ajax_quick_edit_student', array($this, 'ajax_quick_edit_student'));
         
         // Include required files
         $this->includes();
@@ -53,17 +64,12 @@ class School_Manager_Lite_Admin {
      * Enqueue admin scripts and styles
      */
     public function enqueue_admin_scripts($hook) {
-        // Only load on our plugin pages
-        if (strpos($hook, 'school-manager') === false) {
+        // Only enqueue on school manager admin pages
+        if (!strpos($hook, 'school-manager')) {
             return;
         }
         
-        // Ensure jQuery UI is loaded
-        wp_enqueue_script('jquery-ui-core');
-        wp_enqueue_script('jquery-ui-dialog');
-        wp_enqueue_style('wp-jquery-ui-dialog');
-        
-        // Admin styles
+        // Enqueue admin styles
         wp_enqueue_style(
             'school-manager-admin',
             SCHOOL_MANAGER_LITE_URL . 'assets/css/admin.css',
@@ -71,24 +77,72 @@ class School_Manager_Lite_Admin {
             SCHOOL_MANAGER_LITE_VERSION
         );
         
-        // Admin scripts
+        // Enqueue enhanced admin styles for UI improvements
+        wp_enqueue_style(
+            'school-manager-admin-enhanced',
+            SCHOOL_MANAGER_LITE_URL . 'assets/css/admin-style.css',
+            array(),
+            SCHOOL_MANAGER_LITE_VERSION
+        );
+        
+        // Enqueue admin scripts
         wp_enqueue_script(
             'school-manager-admin',
             SCHOOL_MANAGER_LITE_URL . 'assets/js/admin.js',
-            array('jquery', 'jquery-ui-dialog'),
+            array('jquery'),
             SCHOOL_MANAGER_LITE_VERSION,
             true
         );
         
+        // Enqueue class list specific scripts
+        if (isset($_GET['page']) && $_GET['page'] === 'school-manager-classes' && 
+            (!isset($_GET['action']) || $_GET['action'] !== 'edit')) {
+            wp_enqueue_script(
+                'school-manager-class-teacher-assignment',
+                SCHOOL_MANAGER_LITE_URL . 'assets/js/class-teacher-assignment.js',
+                array('jquery'),
+                SCHOOL_MANAGER_LITE_VERSION,
+                true
+            );
+        }
+        
+        // Enqueue class edit specific scripts
+        if (strpos($hook, 'page_school-manager-class-edit') !== false) {
+            wp_enqueue_script(
+                'school-manager-class-edit',
+                SCHOOL_MANAGER_LITE_URL . 'assets/js/class-edit.js',
+                array('jquery'),
+                SCHOOL_MANAGER_LITE_VERSION,
+                true
+            );
+            
+            wp_enqueue_script(
+                'school-manager-student-assignment',
+                SCHOOL_MANAGER_LITE_URL . 'assets/js/student-assignment.js',
+                array('jquery'),
+                SCHOOL_MANAGER_LITE_VERSION,
+                true
+            );
+        }
+        
         // Localize script with AJAX URL and translations
         wp_localize_script(
             'school-manager-admin',
-            'schoolManagerLiteAdmin',
+            'schoolManagerAdmin',
             array(
                 'ajax_url' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('school_manager_lite_admin_nonce'),
                 'i18n' => array(
                     'confirm_delete' => __('Are you sure you want to delete this item?', 'school-manager-lite'),
+                    'confirm_bulk_assign' => __('Are you sure you want to assign this teacher to the selected classes?', 'school-manager-lite'),
+                    'confirm_remove_student' => __('Are you sure you want to remove this student from the class?', 'school-manager-lite'),
+                    'select_teacher_first' => __('Please select a teacher first.', 'school-manager-lite'),
+                    'select_classes_first' => __('Please select at least one class.', 'school-manager-lite'),
+                    'select_students_first' => __('Please select at least one student.', 'school-manager-lite'),
+                    'assigning_teacher' => __('Assigning teacher...', 'school-manager-lite'),
+                    'processing' => __('Processing...', 'school-manager-lite'),
+                    'add_selected_students' => __('Add Selected Students', 'school-manager-lite'),
+                    'server_error' => __('Server error occurred. Please try again.', 'school-manager-lite'),
                     'error' => __('An error occurred. Please try again.', 'school-manager-lite'),
                     'saving' => __('Saving...', 'school-manager-lite'),
                     'saved' => __('Saved!', 'school-manager-lite'),
@@ -105,12 +159,16 @@ class School_Manager_Lite_Admin {
     /**
      * Include required admin files
      */
-    private function includes() {
-        // Include teacher dashboard class
-        require_once dirname(__DIR__) . '/class-teacher-dashboard.php';
+    public function includes() {
+        // Include admin classes
+        require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-admin-notices.php';
+        require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-students-list-table.php';
+        require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-teachers-list-table.php';
+        require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-classes-list-table.php';
+        require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-promo-codes-list-table.php';
         
-        // Initialize teacher dashboard
-        School_Manager_Lite_Teacher_Dashboard::instance();
+        // Initialize the notices system
+        $this->notices = School_Manager_Lite_Admin_Notices::instance();
     }
 
     /**
@@ -389,13 +447,13 @@ class School_Manager_Lite_Admin {
                 }
 
                 // Map WP user ID to internal student table ID if necessary
-$student_row = $student_manager->get_student_by_wp_user_id($student_id);
-if ($student_row) {
-    $result = $student_manager->delete_student($student_row->id);
-} else {
-    // Fall back to assuming ID is already student table ID
-    $result = $student_manager->delete_student($student_id);
-}
+                $student_row = $student_manager->get_student_by_wp_user_id($student_id);
+                if ($student_row) {
+                    $result = $student_manager->delete_student($student_row->id);
+                } else {
+                    // Fall back to assuming ID is already student table ID
+                    $result = $student_manager->delete_student($student_id);
+                }
                 if (is_wp_error($result)) {
                     wp_die($result->get_error_message());
                 }
@@ -406,10 +464,61 @@ if ($student_row) {
             }
         }
         
+        // Handle class actions
+        if (isset($_GET['page']) && $_GET['page'] === 'school-manager-classes' && isset($_GET['action'])) {
+            $class_manager = School_Manager_Lite_Class_Manager::instance();
+            
+            // Handle class edit action
+            if ($_GET['action'] === 'edit' && isset($_GET['id'])) {
+                $class_id = intval($_GET['id']);
+                $class = $class_manager->get_class($class_id);
+                
+                if (!$class) {
+                    wp_die(__('Class not found.', 'school-manager-lite'));
+                }
+                
+                // Get teachers for dropdown
+                $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
+                $teachers = $teacher_manager->get_teachers();
+                
+                // Include edit template
+                require_once SCHOOL_MANAGER_LITE_PLUGIN_DIR . 'templates/admin/edit-class.php';
+                exit;
+            }
+            
+            // Handle class delete action
+            if ($_GET['action'] === 'delete' && isset($_GET['id'])) {
+                $class_id = intval($_GET['id']);
+                
+                // Verify nonce
+                $nonce_action = 'delete_class_' . $class_id;
+                if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], $nonce_action)) {
+                    wp_die(__('Security check failed.', 'school-manager-lite'));
+                }
+                
+                // Delete class
+                $result = $class_manager->delete_class($class_id);
+                
+                if (is_wp_error($result)) {
+                    wp_die($result->get_error_message());
+                }
+                
+                // Redirect back to classes list
+                wp_redirect(admin_url('admin.php?page=school-manager-classes&deleted=1'));
+                exit;
+            }
+        }
+        
         // Handle import/export actions
         if (isset($_GET['page']) && $_GET['page'] === 'school-manager-import-export') {
             $import_export = School_Manager_Lite_Import_Export::instance();
         }
+        
+        // Process adding students to class from edit class page
+        $this->process_add_students_to_class();
+        
+        // Process removing student from class
+        $this->process_remove_student_from_class();
     }
 
     /**
@@ -440,26 +549,438 @@ if ($student_row) {
         $class_manager = School_Manager_Lite_Class_Manager::instance();
         
         // Verify the student and class exist
-        $student = get_user_by('id', $student_id);
+        $student = $student_manager->get_student($student_id);
         $class = $class_manager->get_class($class_id);
         
         if (!$student || !$class) {
-            wp_send_json_error(array('message' => __('Invalid student or class.', 'school-manager-lite')));
+            wp_send_json_error(array('message' => __('Student or class not found.', 'school-manager-lite')));
         }
         
-        // Assign student to class
-        $result = $student_manager->assign_student_to_class($student_id, $class_id);
+        // Add student to class
+        $result = $student_manager->add_student_to_class($student->wp_user_id, $class_id);
         
-        if ($result) {
+        if (is_wp_error($result)) {
+            wp_send_json_error(array('message' => $result->get_error_message()));
+        }
+        
+        wp_send_json_success(array(
+            'message' => sprintf(__('Student %s successfully assigned to class %s.', 'school-manager-lite'), $student->name, $class->name)
+        ));
+    }
+    
+    /**
+     * Handle adding students to a class from the edit class page
+     */
+    public function process_add_students_to_class() {
+        // Check if we're processing the form submission
+        if (isset($_POST['add_students_to_class']) && isset($_POST['_wpnonce'])) {
+            $class_id = isset($_POST['class_id']) ? intval($_POST['class_id']) : 0;
+            
+            // Verify nonce
+            if (!wp_verify_nonce($_POST['_wpnonce'], 'add_students_to_class_' . $class_id)) {
+                wp_die(__('Security check failed.', 'school-manager-lite'));
+            }
+            
+            // Check permissions
+            if (!current_user_can('manage_school_students')) {
+                wp_die(__('You do not have permission to perform this action.', 'school-manager-lite'));
+            }
+            
+            // Check if class exists
+            $class_manager = School_Manager_Lite_Class_Manager::instance();
+            $class = $class_manager->get_class($class_id);
+            
+            if (!$class) {
+                wp_die(__('Invalid class.', 'school-manager-lite'));
+            }
+            
+            // Get selected student IDs
+            $student_ids = isset($_POST['student_ids']) ? (array) $_POST['student_ids'] : array();
+            $student_ids = array_map('intval', $student_ids);
+            
+            if (empty($student_ids)) {
+                // Redirect back with error message
+                $redirect_url = add_query_arg(array(
+                    'page' => 'school-manager-classes',
+                    'action' => 'edit',
+                    'id' => $class_id,
+                    'error' => 'no_students_selected'
+                ), admin_url('admin.php'));
+                
+                wp_redirect($redirect_url);
+                exit;
+            }
+            
+            // Add students to class
+            $student_manager = School_Manager_Lite_Student_Manager::instance();
+            $success_count = 0;
+            $error_count = 0;
+            
+            foreach ($student_ids as $student_id) {
+                $student = $student_manager->get_student($student_id);
+                
+                if ($student && $student->wp_user_id) {
+                    $result = $student_manager->add_student_to_class($student->wp_user_id, $class_id);
+                    
+                    if (!is_wp_error($result)) {
+                        $success_count++;
+                    } else {
+                        $error_count++;
+                    }
+                } else {
+                    $error_count++;
+                }
+            }
+            
+            // Redirect back with success/error message
+            $redirect_url = add_query_arg(array(
+                'page' => 'school-manager-classes',
+                'action' => 'edit',
+                'id' => $class_id,
+                'added' => $success_count,
+                'errors' => $error_count
+            ), admin_url('admin.php'));
+            
+            wp_redirect($redirect_url);
+            exit;
+        }
+    }
+    
+    /**
+     * Handle removing a student from a class
+     */
+    public function process_remove_student_from_class() {
+        // Check if we're processing a student removal
+        if (isset($_GET['action']) && $_GET['action'] === 'remove_student' && isset($_GET['class_id']) && isset($_GET['student_id'])) {
+            $class_id = intval($_GET['class_id']);
+            $student_id = intval($_GET['student_id']);
+            
+            // Verify nonce
+            if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], 'remove_student_' . $student_id)) {
+                wp_die(__('Security check failed.', 'school-manager-lite'));
+            }
+            
+            // Check permissions
+            if (!current_user_can('manage_school_students')) {
+                wp_die(__('You do not have permission to perform this action.', 'school-manager-lite'));
+            }
+            
+            // Remove student from class
+            $student_manager = School_Manager_Lite_Student_Manager::instance();
+            $student = $student_manager->get_student($student_id);
+            
+            if ($student && $student->wp_user_id) {
+                global $wpdb;
+                
+                // Update student record
+                $wpdb->update(
+                    $student_manager->students_table,
+                    array('class_id' => 0),
+                    array('id' => $student_id)
+                );
+                
+                // Get the course ID associated with this class
+                $class_manager = School_Manager_Lite_Class_Manager::instance();
+                $class = $class_manager->get_class($class_id);
+                
+                if ($class && !empty($class->course_id) && function_exists('ld_update_course_access')) {
+                    // Remove from LearnDash course
+                    ld_update_course_access($student->wp_user_id, $class->course_id, true);
+                }
+                
+                // Fire action hook
+                do_action('school_manager_student_removed_from_class', $student->wp_user_id, $class_id);
+            }
+            
+            // Redirect back to class edit page
+            $redirect_url = add_query_arg(array(
+                'page' => 'school-manager-classes',
+                'action' => 'edit',
+                'id' => $class_id,
+                'removed' => 1
+            ), admin_url('admin.php'));
+            
+            wp_redirect($redirect_url);
+            exit;
+        }
+    }
+    
+    /**
+     * AJAX handler for bulk assigning a teacher to multiple classes
+     */
+    public function ajax_bulk_assign_teacher() {
+        // Check permissions
+        if (!current_user_can('manage_school_classes')) {
+            wp_send_json_error(array(
+                'message' => __('Permission denied.', 'school-manager-lite'),
+                'hebrew' => 'אין הרשאה מתאימה'
+            ));
+        }
+        
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'school_manager_lite_admin_nonce')) {
+            wp_send_json_error(array(
+                'message' => __('Security check failed.', 'school-manager-lite'),
+                'hebrew' => 'בדיקת אבטחה נכשלה'
+            ));
+        }
+        
+        // Get parameters
+        $class_ids = isset($_POST['class_ids']) ? $_POST['class_ids'] : array();
+        $teacher_id = isset($_POST['teacher_id']) ? intval($_POST['teacher_id']) : 0;
+        
+        if (empty($class_ids) || !$teacher_id) {
+            wp_send_json_error(array(
+                'message' => __('Missing required parameters.', 'school-manager-lite'),
+                'hebrew' => 'חסרים פרמטרים נדרשים'
+            ));
+        }
+        
+        // Convert class_ids to array if it's a comma-separated string
+        if (!is_array($class_ids)) {
+            $class_ids = explode(',', $class_ids);
+        }
+        
+        // Make sure class IDs are integers
+        $class_ids = array_map('intval', $class_ids);
+        
+        // Verify teacher exists
+        $teacher = get_user_by('id', $teacher_id);
+        if (!$teacher || !$teacher->exists()) {
+            wp_send_json_error(array(
+                'message' => __('Invalid teacher.', 'school-manager-lite'),
+                'hebrew' => 'מורה לא תקין'
+            ));
+        }
+        
+        // Update classes
+        $class_manager = School_Manager_Lite_Class_Manager::instance();
+        $success_count = 0;
+        $error_count = 0;
+        $updates = array();
+        
+        foreach ($class_ids as $class_id) {
+            $class = $class_manager->get_class($class_id);
+            if ($class) {
+                // Update class with new teacher ID
+                $result = $class_manager->update_class($class_id, array('teacher_id' => $teacher_id));
+                
+                if ($result) {
+                    $success_count++;
+                    $updates[$class_id] = $teacher->display_name;
+                } else {
+                    $error_count++;
+                }
+            } else {
+                $error_count++;
+            }
+        }
+        
+        // Create appropriate message based on results
+        $message = '';
+        $hebrew_message = '';
+        
+        if ($success_count > 0) {
+            $message = sprintf(
+                _n(
+                    'Teacher successfully assigned to %d class.',
+                    'Teacher successfully assigned to %d classes.',
+                    $success_count,
+                    'school-manager-lite'
+                ),
+                $success_count
+            );
+            
+            $hebrew_message = sprintf(
+                _n(
+                    'מורה שויך בהצלחה ל-%d כיתה.',
+                    'מורה שויך בהצלחה ל-%d כיתות.',
+                    $success_count,
+                    'school-manager-lite'
+                ),
+                $success_count
+            );
+            
+            if ($error_count > 0) {
+                $message .= ' ' . sprintf(
+                    _n(
+                        '%d class update failed.',
+                        '%d class updates failed.',
+                        $error_count,
+                        'school-manager-lite'
+                    ),
+                    $error_count
+                );
+                
+                $hebrew_message .= ' ' . sprintf(
+                    _n(
+                        'עדכון %d כיתה נכשל.',
+                        'עדכון %d כיתות נכשל.',
+                        $error_count,
+                        'school-manager-lite'
+                    ),
+                    $error_count
+                );
+            }
+            
+            // Store the notice for display after page reload if not AJAX
+            if ($this->notices) {
+                $this->notices->add_success($message, $hebrew_message);
+            }
+            
             wp_send_json_success(array(
-                'message' => sprintf(
-                    __('Student "%s" successfully assigned to class "%s".', 'school-manager-lite'),
-                    $student->display_name,
-                    $class->name
-                )
+                'message' => $message,
+                'hebrew' => $hebrew_message,
+                'updates' => $updates
             ));
         } else {
-            wp_send_json_error(array('message' => __('Failed to assign student to class.', 'school-manager-lite')));
+            wp_send_json_error(array(
+                'message' => __('Failed to assign teacher to classes.', 'school-manager-lite'),
+                'hebrew' => 'שיוך המורה לכיתות נכשל'
+            ));
+        }
+    }
+    
+    /**
+     * AJAX handler for bulk assigning students to a class
+     */
+    public function ajax_bulk_assign_students() {
+        // Check permissions
+        if (!current_user_can('manage_school_students')) {
+            wp_send_json_error(array(
+                'message' => __('Permission denied.', 'school-manager-lite'),
+                'hebrew' => 'אין הרשאה מתאימה'
+            ));
+        }
+        
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'school_manager_lite_admin_nonce')) {
+            wp_send_json_error(array(
+                'message' => __('Security check failed.', 'school-manager-lite'),
+                'hebrew' => 'בדיקת אבטחה נכשלה'
+            ));
+        }
+        
+        // Get parameters
+        $student_ids = isset($_POST['student_ids']) ? $_POST['student_ids'] : array();
+        $class_id = isset($_POST['class_id']) ? intval($_POST['class_id']) : 0;
+        
+        if (empty($student_ids) || !$class_id) {
+            wp_send_json_error(array(
+                'message' => __('Missing required parameters.', 'school-manager-lite'),
+                'hebrew' => 'חסרים פרמטרים נדרשים'
+            ));
+        }
+        
+        // Make sure student IDs are integers
+        if (!is_array($student_ids)) {
+            $student_ids = explode(',', $student_ids);
+        }
+        $student_ids = array_map('intval', $student_ids);
+        
+        // Get necessary managers
+        $student_manager = School_Manager_Lite_Student_Manager::instance();
+        $class_manager = School_Manager_Lite_Class_Manager::instance();
+        
+        // Verify class exists
+        $class = $class_manager->get_class($class_id);
+        if (!$class) {
+            wp_send_json_error(array(
+                'message' => __('Invalid class.', 'school-manager-lite'),
+                'hebrew' => 'כיתה לא תקינה'
+            ));
+        }
+        
+        // Assign students
+        $success_count = 0;
+        $error_count = 0;
+        $assigned_students = array();
+        
+        foreach ($student_ids as $student_id) {
+            $student = get_user_by('id', $student_id);
+            if ($student && $student->exists()) {
+                // Assign student to class
+                $result = $student_manager->assign_class($student_id, $class_id);
+                
+                if ($result) {
+                    $success_count++;
+                    $assigned_students[] = array(
+                        'id' => $student_id,
+                        'name' => $student->display_name,
+                        'email' => $student->user_email
+                    );
+                } else {
+                    $error_count++;
+                }
+            } else {
+                $error_count++;
+            }
+        }
+        
+        // Create appropriate message based on results
+        $message = '';
+        $hebrew_message = '';
+        
+        if ($success_count > 0) {
+            $message = sprintf(
+                _n(
+                    '%d student successfully added to class.',
+                    '%d students successfully added to class.',
+                    $success_count,
+                    'school-manager-lite'
+                ),
+                $success_count
+            );
+            
+            $hebrew_message = sprintf(
+                _n(
+                    '%d תלמיד נוסף לכיתה בהצלחה',
+                    '%d תלמידים נוספו לכיתה בהצלחה',
+                    $success_count,
+                    'school-manager-lite'
+                ),
+                $success_count
+            );
+            
+            if ($error_count > 0) {
+                $message .= ' ' . sprintf(
+                    _n(
+                        '%d student could not be added.',
+                        '%d students could not be added.',
+                        $error_count,
+                        'school-manager-lite'
+                    ),
+                    $error_count
+                );
+                
+                $hebrew_message .= ' ' . sprintf(
+                    _n(
+                        '%d תלמיד לא ניתן היה להוסיף',
+                        '%d תלמידים לא ניתן היה להוסיף',
+                        $error_count,
+                        'school-manager-lite'
+                    ),
+                    $error_count
+                );
+            }
+            
+            // Store the notice for display after page reload if not AJAX
+            if ($this->notices) {
+                $this->notices->add_success($message, $hebrew_message);
+            }
+            
+            wp_send_json_success(array(
+                'message' => $message,
+                'hebrew' => $hebrew_message,
+                'assigned' => $assigned_students,
+                'success_count' => $success_count,
+                'error_count' => $error_count
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => __('Failed to assign students to class.', 'school-manager-lite'),
+                'hebrew' => 'הוספת התלמידים לכיתה נכשלה'
+            ));
         }
     }
     

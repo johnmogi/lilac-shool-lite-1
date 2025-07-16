@@ -23,7 +23,59 @@ class School_Manager_Lite_Import_Export {
      * Constructor
      */
     public function __construct() {
+        error_log('School Manager Lite: Import/Export constructor called');
         add_action('admin_init', array($this, 'handle_import_export_actions'));
+        add_action('wp_ajax_export_teachers', array($this, 'ajax_export_teachers'));
+        add_action('wp_ajax_nopriv_export_teachers', array($this, 'ajax_export_teachers'));
+        error_log('School Manager Lite: admin_init hook added for Import/Export');
+    }
+    
+    /**
+     * AJAX handler for exporting teachers
+     */
+    public function ajax_export_teachers() {
+        error_log('School Manager Lite: AJAX export_teachers called');
+        
+        // Verify nonce
+        if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'export_teachers_nonce')) {
+            error_log('School Manager Lite: Invalid nonce');
+            status_header(403);
+            die('Security check failed');
+        }
+        
+        if (!current_user_can('manage_options')) {
+            error_log('School Manager Lite: User does not have permission to export');
+            status_header(403);
+            die('Unauthorized');
+        }
+        
+        // Force download headers
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="teachers-export-' . date('Y-m-d') . '.csv"');
+        
+        // Output headers
+        $output = fopen('php://output', 'w');
+        fputcsv($output, array('ID', 'Username', 'Email', 'First Name', 'Last Name'));
+        
+        // Get teachers
+        $teachers = get_users(array(
+            'role__in' => array('school_teacher', 'instructor', 'teacher'),
+            'number' => -1
+        ));
+        
+        // Output data
+        foreach ($teachers as $teacher) {
+            fputcsv($output, array(
+                $teacher->ID,
+                $teacher->user_login,
+                $teacher->user_email,
+                $teacher->first_name,
+                $teacher->last_name
+            ));
+        }
+        
+        fclose($output);
+        exit();
     }
     
     /**
@@ -31,17 +83,26 @@ class School_Manager_Lite_Import_Export {
      */
     public function handle_import_export_actions() {
         if (!current_user_can('manage_options')) {
+            error_log('School Manager Lite: User does not have permission to access export');
             return;
         }
         
+        // Debug log the request
+        error_log('School Manager Lite: handle_import_export_actions called');
+        error_log('School Manager Lite: GET params: ' . print_r($_GET, true));
+        
         // Handle export
         if (isset($_GET['export']) && isset($_GET['page']) && $_GET['page'] === 'school-manager-import-export') {
+            error_log('School Manager Lite: Export action detected');
             $type = sanitize_text_field($_GET['export']);
+            error_log('School Manager Lite: Export type: ' . $type);
             $this->export_data($type);
+            exit(); // Make sure to exit after export
         }
         
         // Handle import
         if (isset($_POST['import_submit']) && isset($_FILES['import_file'])) {
+            error_log('School Manager Lite: Import action detected');
             $this->import_data();
         }
     }
@@ -134,32 +195,103 @@ class School_Manager_Lite_Import_Export {
     }
     
     /**
-     * Export teachers to CSV
+     * Export teachers to CSV with class associations
+     */
+    /**
+     * Export teachers to CSV with class associations
      */
     private function export_teachers($output) {
-        $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
-        $teachers = $teacher_manager->get_teachers();
+        global $wpdb;
+        
+        // Add UTF-8 BOM for proper Excel handling
+        fputs($output, "\xEF\xBB\xBF");
         
         // Headers
-        fputcsv($output, array('ID', 'Username', 'Email', 'First Name', 'Last Name', 'Status'));
+        $headers = [
+            'ID',
+            'Username',
+            'Email',
+            'First Name',
+            'Last Name',
+            'Class ID',
+            'Class Name',
+            'Phone',
+            'Last Login',
+            'Status',
+            'Roles',
+            'Registration Date'
+        ];
+        
+        fputcsv($output, $headers);
+        
+        // Get all users with teacher-related roles
+        $teachers = get_users([
+            'role__in' => ['school_teacher', 'instructor', 'teacher', 'group_leader'],
+            'orderby' => 'display_name',
+            'order' => 'ASC',
+            'meta_query' => [
+                'relation' => 'OR',
+                ['key' => 'wp_capabilities', 'value' => 'school_teacher', 'compare' => 'LIKE'],
+                ['key' => 'wp_capabilities', 'value' => 'instructor', 'compare' => 'LIKE'],
+                ['key' => 'wp_capabilities', 'value' => 'teacher', 'compare' => 'LIKE']
+            ]
+        ]);
         
         // Data
         foreach ($teachers as $teacher) {
-            // $teacher is a WP_User object
+            // Get user meta
             $first_name = get_user_meta($teacher->ID, 'first_name', true);
-            $last_name  = get_user_meta($teacher->ID, 'last_name', true);
+            $last_name = get_user_meta($teacher->ID, 'last_name', true);
+            $phone = get_user_meta($teacher->ID, 'billing_phone', true) ?: get_user_meta($teacher->ID, 'phone', true);
+            $last_login = get_user_meta($teacher->ID, 'last_login', true);
+            $status = user_can($teacher->ID, 'school_teacher') ? 'Active' : 'Inactive';
+            $roles = implode(', ', $teacher->roles);
+            $last_login_formatted = $last_login ? date('Y-m-d H:i:s', $last_login) : 'Never';
             
-            // Determine status based on role presence (customize as needed)
-            $status = in_array('school_teacher', (array) $teacher->roles) ? 'active' : 'inactive';
-            
-            fputcsv($output, array(
-                $teacher->ID,
-                $teacher->user_login,
-                $teacher->user_email,
-                $first_name,
-                $last_name,
-                $status
+            // Get classes taught by this teacher
+            $classes = $wpdb->get_results($wpdb->prepare(
+                "SELECT c.id, c.name 
+                 FROM {$wpdb->prefix}school_classes c 
+                 WHERE c.teacher_id = %d 
+                 ORDER BY c.name ASC",
+                $teacher->ID
             ));
+            
+            // If teacher has no classes, add a single row
+            if (empty($classes)) {
+                fputcsv($output, [
+                    $teacher->ID,
+                    $teacher->user_login,
+                    $teacher->user_email,
+                    $first_name,
+                    $last_name,
+                    '', // Empty class ID
+                    '', // Empty class name
+                    $phone,
+                    $last_login_formatted,
+                    $status,
+                    $roles,
+                    $teacher->user_registered
+                ]);
+            } else {
+                // Add a row for each class
+                foreach ($classes as $class) {
+                    fputcsv($output, [
+                        $teacher->ID,
+                        $teacher->user_login,
+                        $teacher->user_email,
+                        $first_name,
+                        $last_name,
+                        $class->id,
+                        $class->name,
+                        $phone,
+                        $last_login_formatted,
+                        $status,
+                        $roles,
+                        $teacher->user_registered
+                    ]);
+                }
+            }
         }
     }
     
@@ -256,54 +388,84 @@ class School_Manager_Lite_Import_Export {
      */
     public function generate_sample_csv($type) {
         $filename = 'sample-' . $type . '.csv';
-        $sample_data = array();
+        
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        
+        $output = fopen('php://output', 'w');
         
         switch ($type) {
             case 'students':
-                $sample_data = array(
-                    array('ID', 'Name', 'Username', 'Password', 'Email', 'Class ID', 'Status'),
-                    array('', 'John Doe', '5551234567', 'S12345', 'john@example.com', '1', 'active'),
-                    array('', 'Jane Smith', '5559876543', 'S67890', 'jane@example.com', '1', 'active')
-                );
+                // Updated for new format: ID, Name, Email, Class ID, Teacher ID, Course ID, Registration Date, Expiry Date, Status
+                fputcsv($output, array('ID', 'Name', 'Email', 'Class ID', 'Teacher ID', 'Course ID', 'Registration Date', 'Expiry Date', 'Status'));
+                fputcsv($output, array('', 'John Doe', 'john@example.com', '1', '10', '898', date('Y-m-d H:i:s'), date('Y-m-d', strtotime('+1 year')), 'active'));
+                fputcsv($output, array('', 'Jane Smith', 'jane@example.com', '2', '11', '898', date('Y-m-d H:i:s'), date('Y-m-d', strtotime('+1 year')), 'active'));
+                fputcsv($output, array('', 'יוסי כהן', 'yossi@example.com', '1', '10', '898', date('Y-m-d H:i:s'), date('Y-m-d', strtotime('+1 year')), 'active'));
+                
+                // Add Hebrew translations for column headers
+                echo "\n\nשימו לב:\n";
+                echo "ID - מזהה (השאירו ריק לתלמיד חדש)\n";
+                echo "Name - שם מלא\n";
+                echo "Email - כתובת דואר אלקטרוני\n";
+                echo "Class ID - מזהה כיתה\n";
+                echo "Teacher ID - מזהה מורה\n";
+                echo "Course ID - מזהה קורס\n";
+                echo "Registration Date - תאריך רישום (YYYY-MM-DD HH:MM:SS)\n";
+                echo "Expiry Date - תאריך פקיעת תוקף (YYYY-MM-DD)\n";
+                echo "Status - סטטוס (active או inactive)\n";
                 break;
+                
             case 'teachers':
-                $sample_data = array(
-                    array('ID', 'Username', 'Email', 'First Name', 'Last Name', 'Status'),
-                    array('', 'teacher1', 'teacher1@example.com', 'John', 'Doe', 'active'),
-                    array('', 'teacher2', 'teacher2@example.com', 'Jane', 'Smith', 'active')
-                );
+                fputcsv($output, array('ID', 'Name', 'Email', 'Phone', 'Status', 'Specialty', 'Bio'));
+                fputcsv($output, array('', 'David Cohen', 'david@example.com', '050-1234567', 'active', 'Math', 'Math teacher with 10 years experience'));
+                fputcsv($output, array('', 'Sarah Levy', 'sarah@example.com', '052-7654321', 'active', 'English', 'English teacher with 5 years experience'));
+                fputcsv($output, array('', 'רותי לוי', 'ruti@example.com', '054-1234567', 'active', 'מדעים', 'מורה למדעים עם 8 שנות ניסיון'));
+                
+                // Add Hebrew translations for column headers
+                echo "\n\nשימו לב:\n";
+                echo "ID - מזהה (השאירו ריק למורה חדש)\n";
+                echo "Name - שם מלא\n";
+                echo "Email - כתובת דואר אלקטרוני\n";
+                echo "Phone - טלפון\n";
+                echo "Status - סטטוס (active או inactive)\n";
+                echo "Specialty - תחום התמחות\n";
+                echo "Bio - ביוגרפיה קצרה\n";
                 break;
+                
             case 'classes':
-                $sample_data = array(
-                    array('ID', 'Name', 'Description', 'Teacher ID', 'Max Students', 'Status'),
-                    array('', 'Math 101', 'Introduction to Mathematics', '1', '30', 'active'),
-                    array('', 'Science 101', 'Introduction to Science', '2', '25', 'active')
-                );
+                fputcsv($output, array('ID', 'Name', 'Teacher ID', 'Course ID', 'Status', 'Description'));
+                fputcsv($output, array('', 'Class A', '10', '898', 'active', 'Morning class'));
+                fputcsv($output, array('', 'כיתה ב', '11', '898', 'active', 'כיתת אחר הצהריים'));
+                
+                // Add Hebrew translations for column headers
+                echo "\n\nשימו לב:\n";
+                echo "ID - מזהה (השאירו ריק לכיתה חדשה)\n";
+                echo "Name - שם הכיתה\n";
+                echo "Teacher ID - מזהה מורה\n";
+                echo "Course ID - מזהה קורס\n";
+                echo "Status - סטטוס (active או inactive)\n";
+                echo "Description - תיאור הכיתה\n";
                 break;
+                
             case 'promo-codes':
-                $sample_data = array(
-                    array('Code', 'Class ID', 'Expiry Date', 'Usage Limit', 'Used Count', 'Status'),
-                    array('MATH2023', '1', date('Y-m-d', strtotime('+1 year')), '1', '0', 'active'),
-                    array('SCI2023', '2', date('Y-m-d', strtotime('+1 year')), '1', '0', 'active')
-                );
+                fputcsv($output, array('ID', 'Code', 'Discount', 'Status', 'Expiry Date'));
+                fputcsv($output, array('', 'WELCOME10', '10', 'active', date('Y-m-d', strtotime('+3 months'))));
+                fputcsv($output, array('', 'קיץ2025', '15', 'active', date('Y-m-d', strtotime('+6 months'))));
+                
+                // Add Hebrew translations for column headers
+                echo "\n\nשימו לב:\n";
+                echo "ID - מזהה (השאירו ריק לקוד חדש)\n";
+                echo "Code - קוד קופון\n";
+                echo "Discount - אחוז הנחה\n";
+                echo "Status - סטטוס (active או inactive)\n";
+                echo "Expiry Date - תאריך תפוגה (YYYY-MM-DD)\n";
                 break;
+                
             default:
                 wp_die(__('Invalid CSV type', 'school-manager-lite'));
         }
         
-        // Generate CSV content
-        $output = fopen('php://temp', 'w');
-        foreach ($sample_data as $row) {
-            fputcsv($output, $row);
-        }
-        rewind($output);
-        $csv = stream_get_contents($output);
         fclose($output);
-        
-        // Output headers for download
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
-        echo $csv;
         exit();
     }
     
@@ -459,85 +621,146 @@ class School_Manager_Lite_Import_Export {
             'added'    => $imported,
             'updated'  => $updated,
         ], admin_url('admin.php'));
-
-        wp_redirect($redirect_url);
-        exit();
+        return $redirect_url;
     }
+    
     /**
-     * Import teachers from CSV
-     * Expected columns: ID, Username, Email, First Name, Last Name, Status
+     * Import teachers from CSV with class associations
+     * Expected columns: ID, Username, Email, First Name, Last Name, Class ID, Class Name, Phone, Status
      */
     private function import_teachers($handle) {
-        if (!$handle) {
-            return;
+        global $wpdb;
+        
+        $headers = fgetcsv($handle);
+        
+        if (!$headers) {
+            wp_die(__('Error reading CSV headers.', 'school-manager-lite'));
         }
-
-        $imported = 0;
-        $updated   = 0;
-        $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
-
+        
+        $required_columns = ['Username', 'Email', 'First Name', 'Last Name'];
+        foreach ($required_columns as $column) {
+            if (!in_array($column, $headers)) {
+                wp_die(sprintf(__('Missing required column: %s', 'school-manager-lite'), $column));
+            }
+        }
+        
+        $column_map = array_flip($headers);
+        
+        // Track teachers and their classes
+        $teachers = array();
+        
         while (($row = fgetcsv($handle)) !== false) {
-            // Skip empty rows
-            if (empty(array_filter($row))) {
-                continue;
+            if (empty($row)) continue;
+            
+            $data = array();
+            foreach ($headers as $i => $header) {
+                $data[$header] = isset($row[$i]) ? $row[$i] : '';
             }
-
-            // Map CSV columns to variables
-            list($id, $username, $email, $first_name, $last_name, $status) = array_pad($row, 6, '');
-
-            // Basic validation – require at least username (login) and names
-            if (empty($username) || empty($first_name) || empty($last_name)) {
-                // Skip invalid row
-                continue;
+            
+            // Validate required fields
+            foreach ($required_columns as $column) {
+                if (empty($data[$column])) {
+                    continue 2; // Skip this row
+                }
             }
-
-            // Ensure we have an email – generate placeholder if not provided
-            if (empty($email)) {
-                $email = sanitize_user($username, true) . '@example.com';
-            }
-
-            // Check if user exists by username or email
-            $user = get_user_by('login', $username);
-            if (!$user) {
-                $user = get_user_by('email', $email);
-            }
-
-            $userdata = [
-                'user_login'   => $username,
-                'user_email'   => $email,
-                'first_name'   => $first_name,
-                'last_name'    => $last_name,
-                'display_name' => $first_name . ' ' . $last_name,
-                'role'         => 'school_teacher',
-            ];
-
-            if ($user) {
-                // Update existing user
-                $userdata['ID'] = $user->ID;
-                wp_update_user($userdata);
-                $updated++;
+            
+            // Create or update user
+            $user_data = array(
+                'user_login' => $data['Username'],
+                'user_email' => $data['Email'],
+                'first_name' => $data['First Name'],
+                'last_name' => $data['Last Name'],
+                'role' => 'school_teacher'
+            );
+            
+            if (!empty($data['ID'])) {
+                $user_id = $data['ID'];
+                $user = get_user_by('id', $user_id);
+                if (!$user) {
+                    continue;
+                }
+                wp_update_user($user_data);
             } else {
-                // Create new user with random password
-                $userdata['user_pass'] = wp_generate_password(12, true, true);
-                $new_id = wp_insert_user($userdata);
-                if (!is_wp_error($new_id)) {
-                    $imported++;
+                $user_data['user_pass'] = wp_generate_password();
+                $user_id = wp_insert_user($user_data);
+            }
+            
+            // Update user meta
+            if (!empty($data['Phone'])) {
+                update_user_meta($user_id, 'phone', $data['Phone']);
+            }
+            
+            // Update status
+            if (!empty($data['Status'])) {
+                update_user_meta($user_id, 'status', $data['Status']);
+            }
+            
+            // Store teacher data with classes for processing
+            if (!isset($teachers[$user_id])) {
+                $teachers[$user_id] = array(
+                    'user_data' => $user_data,
+                    'classes' => array()
+                );
+            }
+            
+            if (!empty($data['Class ID']) && !empty($data['Class Name'])) {
+                $teachers[$user_id]['classes'][] = array(
+                    'id' => $data['Class ID'],
+                    'name' => $data['Class Name']
+                );
+            }
+        }
+        
+        // Process class associations after all users are created
+        foreach ($teachers as $user_id => $teacher_data) {
+            // Get existing classes for this teacher
+            $existing_classes = $wpdb->get_results($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}school_classes WHERE teacher_id = %d",
+                $user_id
+            ));
+            
+            // Remove existing class associations
+            if (!empty($existing_classes)) {
+                foreach ($existing_classes as $class) {
+                    $wpdb->update(
+                        $wpdb->prefix . 'school_classes',
+                        array('teacher_id' => null),
+                        array('id' => $class->id)
+                    );
+                }
+            }
+            
+            // Add new class associations
+            foreach ($teacher_data['classes'] as $class) {
+                // Check if class exists
+                $existing_class = $wpdb->get_row($wpdb->prepare(
+                    "SELECT id FROM {$wpdb->prefix}school_classes WHERE id = %s",
+                    $class['id']
+                ));
+                
+                if ($existing_class) {
+                    // Update class with teacher_id
+                    $wpdb->update(
+                        $wpdb->prefix . 'school_classes',
+                        array('teacher_id' => $user_id),
+                        array('id' => $class['id'])
+                    );
+                } else {
+                    // Create new class if it doesn't exist
+                    $wpdb->insert(
+                        $wpdb->prefix . 'school_classes',
+                        array(
+                            'id' => $class['id'],
+                            'name' => $class['name'],
+                            'teacher_id' => $user_id
+                        )
+                    );
                 }
             }
         }
-
-        fclose($handle);
-
-        // Redirect with query args to show notice
-        $redirect_url = add_query_arg(array(
-            'page'      => 'school-manager-import-export',
-            'imported'  => 1,
-            'added'     => $imported,
-            'updated'   => $updated,
-        ), admin_url('admin.php'));
-
-        wp_redirect($redirect_url);
-        exit();
+        
+        wp_redirect(add_query_arg('imported', 'true', admin_url('admin.php?page=school-manager-import-export')));
+        exit;
     }
     private function import_classes($handle) { /* ... */ }
     private function import_promo_codes($handle) { /* ... */ }

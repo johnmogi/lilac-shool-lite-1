@@ -324,6 +324,18 @@ if (!class_exists('School_Manager_Lite_AJAX_Handlers')) {
     require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-ajax-handlers.php';
 }
 
+// Include Import/Export class
+if (!class_exists('School_Manager_Lite_Import_Export')) {
+    require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-import-export.php';
+    error_log('School Manager Lite: Import/Export class loaded');
+    
+    // Initialize the import/export handler
+    $import_export = School_Manager_Lite_Import_Export::instance();
+    error_log('School Manager Lite: Import/Export instance created: ' . get_class($import_export));
+} else {
+    error_log('School Manager Lite: Import/Export class already exists');
+}
+
 // Activation hook
 register_activation_hook(__FILE__, 'school_manager_lite_activate');
 

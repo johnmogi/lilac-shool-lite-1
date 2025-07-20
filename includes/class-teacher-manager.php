@@ -121,6 +121,24 @@ class School_Manager_Lite_Teacher_Manager {
             }
         }
         
+        // Apply class filter if specified
+        if (isset($args['class_filter']) && $args['class_filter'] > 0) {
+            $class_manager = School_Manager_Lite_Class_Manager::instance();
+            $filtered_teachers = array();
+            
+            foreach ($unique_teachers as $teacher) {
+                $teacher_classes = $class_manager->get_classes(array('teacher_id' => $teacher->ID));
+                foreach ($teacher_classes as $class) {
+                    if ($class->id == $args['class_filter']) {
+                        $filtered_teachers[] = $teacher;
+                        break; // Teacher found in this class, no need to check other classes
+                    }
+                }
+            }
+            
+            return $filtered_teachers;
+        }
+        
         return $unique_teachers;
     }
     
@@ -389,18 +407,51 @@ class School_Manager_Lite_Teacher_Manager {
      * Delete teacher
      *
      * @param int $teacher_id Teacher ID
-     * @return bool True on success, false on failure
+     * @return bool|WP_Error True on success, WP_Error on failure
      */
     public function delete_teacher($teacher_id) {
-        $teacher = $this->get_teacher($teacher_id);
-
+        // Check if user exists
+        $teacher = get_userdata($teacher_id);
         if (!$teacher) {
-            return false;
+            return new WP_Error('teacher_not_found', __('Teacher not found.', 'school-manager-lite'));
         }
 
+        // Check if user is actually a teacher
+        $teacher_roles = array('school_teacher', 'group_leader', 'instructor', 'wdm_instructor', 'stm_lms_instructor');
+        $user_roles = $teacher->roles;
+        $is_teacher = false;
+        
+        foreach ($user_roles as $role) {
+            if (in_array($role, $teacher_roles)) {
+                $is_teacher = true;
+                break;
+            }
+        }
+
+        if (!$is_teacher) {
+            return new WP_Error('not_a_teacher', __('The specified user is not a teacher.', 'school-manager-lite'));
+        }
+
+        // Run action before deletion
         do_action('school_manager_lite_before_delete_teacher', $teacher_id);
 
-        return wp_delete_user($teacher_id);
+        // Remove teacher from all classes
+        $class_manager = School_Manager_Lite_Class_Manager::instance();
+        $classes = $class_manager->get_classes(array('teacher_id' => $teacher_id));
+        
+        foreach ($classes as $class) {
+            $class_manager->remove_teacher_from_class($teacher_id, $class->id);
+        }
+
+        // Delete the WordPress user
+        require_once(ABSPATH . 'wp-admin/includes/user.php');
+        $result = wp_delete_user($teacher_id);
+
+        if (!$result) {
+            return new WP_Error('delete_failed', __('Failed to delete teacher.', 'school-manager-lite'));
+        }
+
+        return true;
     }
 
     /**

@@ -16,6 +16,9 @@ require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-teachers-list-tabl
 // Create an instance of our list table
 $teachers_table = new School_Manager_Lite_Teachers_List_Table();
 
+// Process bulk actions first
+$teachers_table->process_bulk_action();
+
 // Process actions and prepare the table items
 $teachers_table->prepare_items();
 ?>
@@ -60,12 +63,14 @@ $teachers_table->prepare_items();
     
     <hr class="wp-header-end">
     
-    <!-- Search box -->
-    <form method="post">
+    <!-- Search box and table -->
+    <form method="post" id="posts-filter">
         <?php $teachers_table->search_box(__('Search Teachers', 'school-manager-lite'), 'search-teachers'); ?>
         
         <!-- Display the table -->
         <?php $teachers_table->display(); ?>
+        
+        <?php wp_nonce_field('bulk-teachers'); ?>
     </form>
 </div>
 

@@ -197,14 +197,8 @@ class School_Manager_Lite_Import_Export {
     /**
      * Export teachers to CSV with class associations
      */
-    /**
-     * Export teachers to CSV with class associations
-     */
     private function export_teachers($output) {
         global $wpdb;
-        
-        // Add UTF-8 BOM for proper Excel handling
-        fputs($output, "\xEF\xBB\xBF");
         
         // Headers
         $headers = [
@@ -224,18 +218,41 @@ class School_Manager_Lite_Import_Export {
         
         fputcsv($output, $headers);
         
-        // Get all users with teacher-related roles
+        // Get all users with teacher-related roles - try multiple approaches
         $teachers = get_users([
             'role__in' => ['school_teacher', 'instructor', 'teacher', 'group_leader'],
             'orderby' => 'display_name',
             'order' => 'ASC',
-            'meta_query' => [
-                'relation' => 'OR',
-                ['key' => 'wp_capabilities', 'value' => 'school_teacher', 'compare' => 'LIKE'],
-                ['key' => 'wp_capabilities', 'value' => 'instructor', 'compare' => 'LIKE'],
-                ['key' => 'wp_capabilities', 'value' => 'teacher', 'compare' => 'LIKE']
-            ]
+            'number' => -1
         ]);
+        
+        // If no teachers found with specific roles, get all users and filter by capabilities
+        if (empty($teachers)) {
+            $all_users = get_users(['number' => -1]);
+            $teachers = [];
+            foreach ($all_users as $user) {
+                if (user_can($user->ID, 'school_teacher') || 
+                    user_can($user->ID, 'instructor') || 
+                    user_can($user->ID, 'teacher') ||
+                    in_array('school_teacher', $user->roles) ||
+                    in_array('instructor', $user->roles) ||
+                    in_array('teacher', $user->roles)) {
+                    $teachers[] = $user;
+                }
+            }
+        }
+        
+        // If still no teachers, get users from the teachers table directly
+        if (empty($teachers)) {
+            $teacher_ids = $wpdb->get_col("SELECT DISTINCT teacher_id FROM {$wpdb->prefix}school_classes WHERE teacher_id > 0");
+            if (!empty($teacher_ids)) {
+                $teachers = get_users([
+                    'include' => $teacher_ids,
+                    'orderby' => 'display_name',
+                    'order' => 'ASC'
+                ]);
+            }
+        }
         
         // Data
         foreach ($teachers as $teacher) {
@@ -244,7 +261,7 @@ class School_Manager_Lite_Import_Export {
             $last_name = get_user_meta($teacher->ID, 'last_name', true);
             $phone = get_user_meta($teacher->ID, 'billing_phone', true) ?: get_user_meta($teacher->ID, 'phone', true);
             $last_login = get_user_meta($teacher->ID, 'last_login', true);
-            $status = user_can($teacher->ID, 'school_teacher') ? 'Active' : 'Inactive';
+            $status = 'Active'; // Default to active
             $roles = implode(', ', $teacher->roles);
             $last_login_formatted = $last_login ? date('Y-m-d H:i:s', $last_login) : 'Never';
             

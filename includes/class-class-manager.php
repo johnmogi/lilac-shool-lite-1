@@ -313,6 +313,36 @@ class School_Manager_Lite_Class_Manager {
         
         return (int) $count;
     }
+
+    /**
+     * Assign teacher to class
+     *
+     * @param int $teacher_id Teacher ID
+     * @param int $class_id Class ID
+     * @return bool|WP_Error True on success, WP_Error on failure
+     */
+    public function assign_teacher_to_class($teacher_id, $class_id) {
+        // Validate teacher exists
+        $teacher = get_user_by('ID', $teacher_id);
+        if (!$teacher) {
+            return new WP_Error('invalid_teacher', __('Invalid teacher ID.', 'school-manager-lite'));
+        }
+
+        // Validate class exists
+        $class = $this->get_class($class_id);
+        if (!$class) {
+            return new WP_Error('invalid_class', __('Invalid class ID.', 'school-manager-lite'));
+        }
+
+        // Update the class with the new teacher
+        $result = $this->update_class($class_id, array('teacher_id' => $teacher_id));
+        
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return true;
+    }
 }
 
 // Initialize the Class Manager

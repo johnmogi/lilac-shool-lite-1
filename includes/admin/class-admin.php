@@ -94,6 +94,12 @@ class School_Manager_Lite_Admin {
             true
         );
         
+        // Enqueue Thickbox for teachers page modal functionality
+        if (isset($_GET['page']) && $_GET['page'] === 'school-manager-teachers') {
+            wp_enqueue_script('thickbox');
+            wp_enqueue_style('thickbox');
+        }
+        
         // Enqueue class list specific scripts
         if (isset($_GET['page']) && $_GET['page'] === 'school-manager-classes' && 
             (!isset($_GET['action']) || $_GET['action'] !== 'edit')) {
@@ -460,6 +466,38 @@ class School_Manager_Lite_Admin {
 
                 // Redirect back to students list
                 wp_redirect(admin_url('admin.php?page=school-manager-students&deleted=1'));
+                exit;
+            }
+        }
+        
+        // Handle teacher actions
+        if (isset($_GET['page']) && $_GET['page'] === 'school-manager-teachers' && isset($_GET['action'])) {
+            $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
+            
+            // Handle teacher delete action
+            if ($_GET['action'] === 'delete' && isset($_GET['id'])) {
+                $teacher_id = intval($_GET['id']);
+                
+                // Verify nonce
+                $nonce_action = 'delete_teacher_' . $teacher_id;
+                if (!isset($_GET['_wpnonce']) || !wp_verify_nonce($_GET['_wpnonce'], $nonce_action)) {
+                    wp_die(__('Security check failed.', 'school-manager-lite'));
+                }
+                
+                // Check permissions
+                if (!current_user_can('delete_users')) {
+                    wp_die(__('You do not have permission to delete teachers.', 'school-manager-lite'));
+                }
+                
+                // Delete the teacher
+                $result = $teacher_manager->delete_teacher($teacher_id);
+                
+                if (is_wp_error($result)) {
+                    wp_die($result->get_error_message());
+                }
+                
+                // Redirect back to teachers list with success message
+                wp_redirect(admin_url('admin.php?page=school-manager-teachers&deleted=1'));
                 exit;
             }
         }

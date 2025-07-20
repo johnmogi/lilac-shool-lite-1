@@ -58,7 +58,6 @@ class School_Manager_Lite_Teacher_Manager {
         $this->ensure_teacher_role_exists();
         
         $defaults = array(
-            'role' => 'school_teacher',
             'orderby' => 'display_name',
             'order' => 'ASC',
             'number' => -1,
@@ -76,8 +75,53 @@ class School_Manager_Lite_Teacher_Manager {
             $args['search'] = '*' . $args['search'] . '*';
         }
         
-        // Get users with teacher role
-        return get_users($args);
+        // Define all teacher roles
+        $teacher_roles = array(
+            'school_teacher',
+            'group_leader', 
+            'instructor',
+            'Instructor',
+            'wdm_instructor',
+            'stm_lms_instructor'
+        );
+        
+        // If a specific role was requested, use it
+        if (isset($args['role']) && in_array($args['role'], $teacher_roles)) {
+            return get_users($args);
+        }
+        
+        // Otherwise, get users with any teacher role
+        unset($args['role']); // Remove role filter
+        $args['role__in'] = $teacher_roles;
+        
+        $teachers = get_users($args);
+        
+        // Also check for users with group_leader meta keys (LearnDash compatibility)
+        $meta_args = $args;
+        unset($meta_args['role__in']);
+        $meta_args['meta_query'] = array(
+            array(
+                'key' => 'wp_capabilities',
+                'value' => 'group_leader',
+                'compare' => 'LIKE'
+            )
+        );
+        
+        $meta_teachers = get_users($meta_args);
+        
+        // Merge and remove duplicates
+        $all_teachers = array_merge($teachers, $meta_teachers);
+        $unique_teachers = array();
+        $seen_ids = array();
+        
+        foreach ($all_teachers as $teacher) {
+            if (!in_array($teacher->ID, $seen_ids)) {
+                $unique_teachers[] = $teacher;
+                $seen_ids[] = $teacher->ID;
+            }
+        }
+        
+        return $unique_teachers;
     }
     
     /**

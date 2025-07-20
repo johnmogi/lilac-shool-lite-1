@@ -186,9 +186,8 @@ class School_Manager_Lite_Teachers_List_Table extends WP_List_Table {
         // Handle search
         $search = isset($_REQUEST['s']) ? sanitize_text_field($_REQUEST['s']) : '';
         
-        // Set up query args
+        // Set up query args (no role restriction - let teacher manager handle it)
         $args = array(
-            'role' => 'school_teacher',
             'orderby' => $orderby,
             'order' => $order,
             'number' => $per_page,
@@ -196,8 +195,9 @@ class School_Manager_Lite_Teachers_List_Table extends WP_List_Table {
             'search' => !empty($search) ? '*' . $search . '*' : '',
         );
         
-        $total_items = count_users(array('role' => 'school_teacher'));
-        $total_items = $total_items['avail_roles']['school_teacher'] ?? 0;
+        // Get all teachers to count total items
+        $all_teachers = $teacher_manager->get_teachers(array('number' => -1));
+        $total_items = count($all_teachers);
         
         $this->items = $teacher_manager->get_teachers($args);
         

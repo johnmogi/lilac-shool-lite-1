@@ -312,6 +312,11 @@ if (!class_exists('School_Manager_Lite_Teacher_Student_Relationships')) {
     require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-teacher-student-relationships.php';
 }
 
+// Include Teacher Roles management
+if (!class_exists('School_Manager_Teacher_Roles')) {
+    require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-teacher-roles.php';
+}
+
 if (!class_exists('School_Manager_Lite_Teacher_Dashboard')) {
     require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-teacher-dashboard.php';
 }

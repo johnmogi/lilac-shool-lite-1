@@ -374,14 +374,14 @@ class School_Manager_Lite_Import_Export {
             return;
         }
         
-        $header = fgetcsv($handle);
+        $headers = fgetcsv($handle);
         
         switch ($type) {
             case 'students':
                 $this->import_students($handle);
                 break;
             case 'teachers':
-                $this->import_teachers($handle);
+                $this->import_teachers($handle, $headers);
                 break;
             case 'classes':
                 $this->import_classes($handle);
@@ -391,7 +391,10 @@ class School_Manager_Lite_Import_Export {
                 break;
         }
         
-        fclose($handle);
+        // Close file handle if it's still valid
+        if (is_resource($handle)) {
+            fclose($handle);
+        }
         
         // Redirect back with success message
         wp_redirect(add_query_arg('imported', '1', $_SERVER['HTTP_REFERER']));
@@ -609,8 +612,6 @@ class School_Manager_Lite_Import_Export {
             }
         }
         
-        fclose($handle);
-        
         // Add admin notice with results
         add_action('admin_notices', function() use ($imported, $updated, $errors) {
             $message = sprintf(
@@ -645,107 +646,205 @@ class School_Manager_Lite_Import_Export {
      * Import teachers from CSV with class associations
      * Expected columns: ID, Username, Email, First Name, Last Name, Class ID, Class Name, Phone, Status
      */
-    private function import_teachers($handle) {
+    private function import_teachers($handle, $headers = null) {
         global $wpdb;
         
-        $headers = fgetcsv($handle);
+        error_log("Import Teachers: Starting teacher import process");
+        
+        // If headers not provided, read them from handle
+        if (!$headers) {
+            $headers = fgetcsv($handle);
+        }
         
         if (!$headers) {
+            error_log("Import Teachers: Error reading CSV headers");
             wp_die(__('Error reading CSV headers.', 'school-manager-lite'));
         }
+        
+        error_log("Import Teachers: CSV headers found: " . implode(', ', $headers));
         
         $required_columns = ['Username', 'Email', 'First Name', 'Last Name'];
         foreach ($required_columns as $column) {
             if (!in_array($column, $headers)) {
+                error_log("Import Teachers: Missing required column: {$column}");
                 wp_die(sprintf(__('Missing required column: %s', 'school-manager-lite'), $column));
             }
         }
         
         $column_map = array_flip($headers);
-        
-        // Track teachers and their classes
         $teachers = array();
+        $imported_count = 0;
         
         while (($row = fgetcsv($handle)) !== false) {
-            if (empty($row)) continue;
+            if (empty($row) || (count($row) == 1 && empty($row[0]))) continue;
             
             $data = array();
             foreach ($headers as $i => $header) {
-                $data[$header] = isset($row[$i]) ? $row[$i] : '';
+                $data[$header] = isset($row[$i]) ? trim($row[$i]) : '';
             }
+            
+            error_log("Import Teachers: Processing row: " . print_r($data, true));
             
             // Validate required fields
             foreach ($required_columns as $column) {
                 if (empty($data[$column])) {
+                    error_log("Import Teachers: Skipping row due to missing {$column}");
                     continue 2; // Skip this row
                 }
             }
             
-            // Create or update user
+            // Create or update user with CORRECT role
             $user_data = array(
                 'user_login' => $data['Username'],
                 'user_email' => $data['Email'],
                 'first_name' => $data['First Name'],
                 'last_name' => $data['Last Name'],
-                'role' => 'school_teacher'
+                'display_name' => trim($data['First Name'] . ' ' . $data['Last Name']),
+                'role' => 'wdm_instructor' // FIXED: Use correct instructor role
             );
             
+            $user_id = null;
+            
             if (!empty($data['ID'])) {
-                $user_id = $data['ID'];
+                $user_id = intval($data['ID']);
                 $user = get_user_by('id', $user_id);
-                if (!$user) {
+                if ($user) {
+                    $user_data['ID'] = $user_id;
+                    wp_update_user($user_data);
+                    
+                    // Ensure correct role
+                    $user->remove_role('school_teacher');
+                    $user->add_role('wdm_instructor');
+                    
+                    error_log("Import Teachers: Updated existing user {$user_id}");
+                } else {
+                    error_log("Import Teachers: User ID {$user_id} not found, skipping");
                     continue;
                 }
-                wp_update_user($user_data);
             } else {
-                $user_data['user_pass'] = wp_generate_password();
-                $user_id = wp_insert_user($user_data);
+                // Check if user already exists by username or email
+                $existing_user = get_user_by('login', $data['Username']);
+                if (!$existing_user) {
+                    $existing_user = get_user_by('email', $data['Email']);
+                }
+                
+                if ($existing_user) {
+                    $user_id = $existing_user->ID;
+                    $user_data['ID'] = $user_id;
+                    wp_update_user($user_data);
+                    
+                    // Ensure correct role
+                    $existing_user->remove_role('school_teacher');
+                    $existing_user->add_role('wdm_instructor');
+                    
+                    error_log("Import Teachers: Updated existing user {$user_id} with correct role");
+                } else {
+                    // Create new user
+                    $user_data['user_pass'] = wp_generate_password();
+                    $user_id = wp_insert_user($user_data);
+                    
+                    if (is_wp_error($user_id)) {
+                        error_log("Import Teachers: Error creating user: " . $user_id->get_error_message());
+                        continue;
+                    }
+                    
+                    error_log("Import Teachers: Created new user {$user_id}");
+                }
             }
             
-            // Update user meta
-            if (!empty($data['Phone'])) {
-                update_user_meta($user_id, 'phone', $data['Phone']);
-            }
-            
-            // Update status
-            if (!empty($data['Status'])) {
-                update_user_meta($user_id, 'status', $data['Status']);
-            }
-            
-            // Store teacher data with classes for processing
-            if (!isset($teachers[$user_id])) {
-                $teachers[$user_id] = array(
-                    'user_data' => $user_data,
-                    'classes' => array()
-                );
-            }
-            
-            if (!empty($data['Class ID']) && !empty($data['Class Name'])) {
-                $teachers[$user_id]['classes'][] = array(
-                    'id' => $data['Class ID'],
-                    'name' => $data['Class Name']
-                );
+            if ($user_id) {
+                // Add comprehensive teacher capabilities
+                $user = get_user_by('id', $user_id);
+                if ($user) {
+                    $capabilities = array(
+                        'read' => true,
+                        'upload_files' => true,
+                        'edit_posts' => true,
+                        'edit_published_posts' => true,
+                        'publish_posts' => true,
+                        'delete_posts' => true,
+                        'delete_published_posts' => true,
+                        'school_teacher' => true,
+                        'manage_school_students' => true,
+                        'view_school_reports' => true,
+                        'access_teacher_dashboard' => true,
+                        'edit_sfwd-courses' => true,
+                        'edit_others_sfwd-courses' => true,
+                        'publish_sfwd-courses' => true,
+                        'read_private_sfwd-courses' => true,
+                        'delete_sfwd-courses' => true,
+                        'delete_others_sfwd-courses' => true,
+                        'edit_sfwd-lessons' => true,
+                        'edit_others_sfwd-lessons' => true,
+                        'publish_sfwd-lessons' => true,
+                        'read_private_sfwd-lessons' => true,
+                        'delete_sfwd-lessons' => true,
+                        'delete_others_sfwd-lessons' => true,
+                        'edit_sfwd-topic' => true,
+                        'edit_others_sfwd-topic' => true,
+                        'publish_sfwd-topic' => true,
+                        'read_private_sfwd-topic' => true,
+                        'delete_sfwd-topic' => true,
+                        'delete_others_sfwd-topic' => true,
+                        'edit_sfwd-quiz' => true,
+                        'edit_others_sfwd-quiz' => true,
+                        'publish_sfwd-quiz' => true,
+                        'read_private_sfwd-quiz' => true,
+                        'delete_sfwd-quiz' => true,
+                        'delete_others_sfwd-quiz' => true,
+                        'edit_sfwd-question' => true,
+                        'edit_others_sfwd-question' => true,
+                        'publish_sfwd-question' => true,
+                        'read_private_sfwd-question' => true,
+                        'delete_sfwd-question' => true,
+                        'delete_others_sfwd-question' => true,
+                    );
+                    
+                    foreach ($capabilities as $cap => $grant) {
+                        $user->add_cap($cap, $grant);
+                    }
+                }
+                
+                // Update user meta
+                if (!empty($data['Phone'])) {
+                    update_user_meta($user_id, 'phone', $data['Phone']);
+                }
+                
+                if (!empty($data['Status'])) {
+                    update_user_meta($user_id, 'status', $data['Status']);
+                }
+                
+                // Mark as teacher
+                update_user_meta($user_id, 'is_teacher', '1');
+                update_user_meta($user_id, 'teacher', '1');
+                
+                // Store teacher data with classes for processing
+                if (!isset($teachers[$user_id])) {
+                    $teachers[$user_id] = array(
+                        'user_data' => $user_data,
+                        'classes' => array()
+                    );
+                }
+                
+                if (!empty($data['Class ID']) && !empty($data['Class Name'])) {
+                    $teachers[$user_id]['classes'][] = array(
+                        'id' => $data['Class ID'],
+                        'name' => $data['Class Name']
+                    );
+                }
+                
+                $imported_count++;
             }
         }
         
         // Process class associations after all users are created
         foreach ($teachers as $user_id => $teacher_data) {
-            // Get existing classes for this teacher
-            $existing_classes = $wpdb->get_results($wpdb->prepare(
-                "SELECT id FROM {$wpdb->prefix}school_classes WHERE teacher_id = %d",
-                $user_id
-            ));
-            
-            // Remove existing class associations
-            if (!empty($existing_classes)) {
-                foreach ($existing_classes as $class) {
-                    $wpdb->update(
-                        $wpdb->prefix . 'school_classes',
-                        array('teacher_id' => null),
-                        array('id' => $class->id)
-                    );
-                }
-            }
+            // Remove existing class associations for this teacher
+            $wpdb->update(
+                $wpdb->prefix . 'school_classes',
+                array('teacher_id' => null),
+                array('teacher_id' => $user_id)
+            );
             
             // Add new class associations
             foreach ($teacher_data['classes'] as $class) {
@@ -757,14 +856,15 @@ class School_Manager_Lite_Import_Export {
                 
                 if ($existing_class) {
                     // Update class with teacher_id
-                    $wpdb->update(
+                    $result = $wpdb->update(
                         $wpdb->prefix . 'school_classes',
                         array('teacher_id' => $user_id),
                         array('id' => $class['id'])
                     );
+                    error_log("Import Teachers: Assigned teacher {$user_id} to existing class {$class['id']}");
                 } else {
                     // Create new class if it doesn't exist
-                    $wpdb->insert(
+                    $result = $wpdb->insert(
                         $wpdb->prefix . 'school_classes',
                         array(
                             'id' => $class['id'],
@@ -772,11 +872,17 @@ class School_Manager_Lite_Import_Export {
                             'teacher_id' => $user_id
                         )
                     );
+                    error_log("Import Teachers: Created new class {$class['id']} and assigned teacher {$user_id}");
                 }
             }
         }
         
-        wp_redirect(add_query_arg('imported', 'true', admin_url('admin.php?page=school-manager-import-export')));
+        error_log("Import Teachers: Import completed. Imported {$imported_count} teachers");
+        
+        wp_redirect(add_query_arg(array(
+            'imported' => 'teachers',
+            'count' => $imported_count
+        ), admin_url('admin.php?page=school-manager-import-export')));
         exit;
     }
     private function import_classes($handle) { /* ... */ }

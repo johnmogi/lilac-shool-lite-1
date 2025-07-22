@@ -272,7 +272,7 @@ class School_Manager_Lite_Admin_Wizard {
             <form method="post">
                 <?php wp_nonce_field('school_manager_wizard', 'school_manager_wizard_nonce'); ?>
                 <div class="school-manager-wizard-buttons">
-                    <a href="<?php echo admin_url('admin.php?page=school-manager-lite'); ?>" class="button"><?php _e('דלג על ההתקנה', 'school-manager-lite'); ?></a>
+                    <!-- Skip Setup button removed by request -->
                     <button class="button-primary" type="submit"><?php _e('התחל התקנה', 'school-manager-lite'); ?></button>
                 </div>
             </form>

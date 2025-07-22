@@ -183,8 +183,8 @@ class School_Manager_Lite_Admin {
     public function add_admin_menu() {
         // Main menu item
         add_menu_page(
-            __('School Manager', 'school-manager-lite'),
-            __('School Manager', 'school-manager-lite'),
+            __('ניהול בית ספר', 'school-manager-lite'),
+            __('ניהול בית ספר', 'school-manager-lite'),
             'manage_options',
             'school-manager',
             array($this, 'render_dashboard_page'),
@@ -195,8 +195,8 @@ class School_Manager_Lite_Admin {
         // Dashboard
         add_submenu_page(
             'school-manager',
-            __('Dashboard', 'school-manager-lite'),
-            __('Dashboard', 'school-manager-lite'),
+            __('ממשק ניהול', 'school-manager-lite'),
+            __('ממשק ניהול', 'school-manager-lite'),
             'manage_options',
             'school-manager',
             array($this, 'render_dashboard_page')
@@ -205,8 +205,8 @@ class School_Manager_Lite_Admin {
         // Teachers
         add_submenu_page(
             'school-manager',
-            __('Teachers', 'school-manager-lite'),
-            __('Teachers', 'school-manager-lite'),
+            __('מורים', 'school-manager-lite'),
+            __('מורים', 'school-manager-lite'),
             'manage_options',
             'school-manager-teachers',
             array($this, 'render_teachers_page')
@@ -215,8 +215,8 @@ class School_Manager_Lite_Admin {
         // Classes
         add_submenu_page(
             'school-manager',
-            __('Classes', 'school-manager-lite'),
-            __('Classes', 'school-manager-lite'),
+            __('כיתות', 'school-manager-lite'),
+            __('כיתות', 'school-manager-lite'),
             'manage_options',
             'school-manager-classes',
             array($this, 'render_classes_page')
@@ -225,8 +225,8 @@ class School_Manager_Lite_Admin {
         // Students
         add_submenu_page(
             'school-manager',
-            __('Students', 'school-manager-lite'),
-            __('Students', 'school-manager-lite'),
+            __('תלמידים', 'school-manager-lite'),
+            __('תלמידים', 'school-manager-lite'),
             'manage_options',
             'school-manager-students',
             array($this, 'render_students_page')
@@ -235,8 +235,8 @@ class School_Manager_Lite_Admin {
         // Promo Codes list
         add_submenu_page(
             'school-manager',
-            __('Promo Codes', 'school-manager-lite'),
-            __('Promo Codes', 'school-manager-lite'),
+            __('קודי הנחה', 'school-manager-lite'),
+            __('קודי הנחה', 'school-manager-lite'),
             'access_school_content',
             'school-manager-promo-codes',
             array($this, 'render_promo_codes_page')
@@ -244,8 +244,8 @@ class School_Manager_Lite_Admin {
         // Promo Codes Generator
         add_submenu_page(
             'school-manager',
-            __('Generate Promo Codes', 'school-manager-lite'),
-            __('Generate Codes', 'school-manager-lite'),
+            __('יצירת קודי הנחה', 'school-manager-lite'),
+            __('יצירת קוד', 'school-manager-lite'),
             'access_school_content',
             'school-manager-promo-generate',
             array($this, 'render_promo_generate_page')
@@ -254,8 +254,8 @@ class School_Manager_Lite_Admin {
         // Import/Export
         add_submenu_page(
             'school-manager',
-            __('Import/Export', 'school-manager-lite'),
-            __('Import/Export', 'school-manager-lite'),
+            __('ייבוא/ייצוא', 'school-manager-lite'),
+            __('ייבוא/ייצוא', 'school-manager-lite'),
             'manage_options',
             'school-manager-import-export',
             array($this, 'render_import_export_page')

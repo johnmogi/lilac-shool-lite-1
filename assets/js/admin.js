@@ -272,13 +272,13 @@
                 
                 // Save via AJAX
                 $.ajax({
-                    url: schoolManagerAjax.ajaxurl,
+                    url: schoolManagerAdmin.ajax_url,
                     type: 'POST',
                     data: {
                         action: 'assign_teacher_to_class',
                         teacher_id: teacherId,
                         class_id: classId,
-                        nonce: schoolManagerAjax.nonce
+                        nonce: schoolManagerAdmin.nonce
                     },
                     success: function(response) {
                         if (response.success) {

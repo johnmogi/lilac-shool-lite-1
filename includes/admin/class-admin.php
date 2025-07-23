@@ -51,6 +51,7 @@ class School_Manager_Lite_Admin {
         // Admin AJAX handlers
         add_action('wp_ajax_download_sample_csv', array($this, 'handle_download_sample_csv'));
         add_action('wp_ajax_add_class_to_student', array($this, 'ajax_assign_class_to_student'));
+        add_action('wp_ajax_assign_teacher_to_class', array($this, 'ajax_assign_teacher_to_class'));
         add_action('wp_ajax_bulk_assign_teacher', array($this, 'ajax_bulk_assign_teacher'));
         add_action('wp_ajax_bulk_assign_students', array($this, 'ajax_bulk_assign_students'));
         add_action('wp_ajax_assign_promo_to_student', array($this, 'ajax_assign_promo_to_student'));
@@ -172,6 +173,9 @@ class School_Manager_Lite_Admin {
         require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-teachers-list-table.php';
         require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-classes-list-table.php';
         require_once SCHOOL_MANAGER_LITE_PATH . 'includes/admin/class-promo-codes-list-table.php';
+        
+        // Include LearnDash integration
+        require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-learndash-integration.php';
         
         // Initialize the notices system
         $this->notices = School_Manager_Lite_Admin_Notices::instance();
@@ -1185,5 +1189,118 @@ class School_Manager_Lite_Admin {
         } else {
             wp_send_json_error(array('message' => implode(' ', $messages) ?: __('Failed to update student.', 'school-manager-lite')));
         }
+    }
+    
+    /**
+     * AJAX handler for assigning a single teacher to a single class with LearnDash group integration
+     */
+    public function ajax_assign_teacher_to_class() {
+        // Check permissions
+        if (!current_user_can('manage_school_classes')) {
+            wp_send_json_error(array(
+                'message' => __('Permission denied.', 'school-manager-lite'),
+                'hebrew' => 'אין הרשאה מתאימה'
+            ));
+        }
+        
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'school_manager_lite_admin_nonce')) {
+            wp_send_json_error(array(
+                'message' => __('Security check failed.', 'school-manager-lite'),
+                'hebrew' => 'בדיקת אבטחה נכשלה'
+            ));
+        }
+        
+        // Get parameters
+        $class_id = isset($_POST['class_id']) ? intval($_POST['class_id']) : 0;
+        $teacher_id = isset($_POST['teacher_id']) ? intval($_POST['teacher_id']) : 0;
+        
+        if (!$class_id || !$teacher_id) {
+            wp_send_json_error(array(
+                'message' => __('Missing required parameters.', 'school-manager-lite'),
+                'hebrew' => 'חסרים פרמטרים נדרשים'
+            ));
+        }
+        
+        // Verify teacher exists
+        $teacher = get_user_by('id', $teacher_id);
+        if (!$teacher || !$teacher->exists()) {
+            wp_send_json_error(array(
+                'message' => __('Invalid teacher.', 'school-manager-lite'),
+                'hebrew' => 'מורה לא תקין'
+            ));
+        }
+        
+        // Get class manager and verify class exists
+        $class_manager = School_Manager_Lite_Class_Manager::instance();
+        $class = $class_manager->get_class($class_id);
+        
+        if (!$class) {
+            wp_send_json_error(array(
+                'message' => __('Invalid class.', 'school-manager-lite'),
+                'hebrew' => 'כיתה לא תקינה'
+            ));
+        }
+        
+        // Update class with new teacher ID
+        $result = $class_manager->update_class($class_id, array('teacher_id' => $teacher_id));
+        
+        if (!$result) {
+            wp_send_json_error(array(
+                'message' => __('Failed to assign teacher to class.', 'school-manager-lite'),
+                'hebrew' => 'שיוך המורה לכיתה נכשל'
+            ));
+        }
+        
+        // LearnDash Group Integration
+        $group_connected = false;
+        $group_message = '';
+        
+        if (class_exists('School_Manager_Lite_LearnDash_Integration')) {
+            $learndash_integration = School_Manager_Lite_LearnDash_Integration::instance();
+            
+            if ($learndash_integration->is_learndash_active()) {
+                // Create or get group for this class
+                $group_id = $learndash_integration->create_or_get_group_for_class($class_id, $class);
+                
+                if (!is_wp_error($group_id)) {
+                    // Assign teacher as group leader
+                    $teacher_assigned = $learndash_integration->assign_teacher_to_group($teacher_id, $group_id);
+                    
+                    if ($teacher_assigned) {
+                        $group_connected = true;
+                        $group_message = sprintf(__('Teacher assigned to LearnDash group: Class %s', 'school-manager-lite'), $class->name);
+                        
+                        // Fire action hook for other plugins
+                        do_action('school_manager_teacher_assigned_to_class', $teacher_id, $class_id);
+                    }
+                }
+            }
+        }
+        
+        // Prepare success message
+        $message = sprintf(
+            __('Teacher "%s" successfully assigned to class "%s".', 'school-manager-lite'),
+            $teacher->display_name,
+            $class->name
+        );
+        
+        $hebrew_message = sprintf(
+            __('מורה "%s" שויך בהצלחה לכיתה "%s".', 'school-manager-lite'),
+            $teacher->display_name,
+            $class->name
+        );
+        
+        if ($group_connected) {
+            $message .= ' ' . $group_message;
+        }
+        
+        wp_send_json_success(array(
+            'message' => $message,
+            'hebrew' => $hebrew_message,
+            'teacher_name' => $teacher->display_name,
+            'class_name' => $class->name,
+            'group_connected' => $group_connected
+        ));
     }
 }

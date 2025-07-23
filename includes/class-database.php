@@ -175,5 +175,25 @@ class School_Manager_Lite_Database {
             
             $this->update_db_version('1.1.0');
         }
+        
+        // Version 1.2.0 - Add group_id and course_id to classes table for LearnDash integration
+        if (version_compare($current_version, '1.2.0', '<')) {
+            global $wpdb;
+            $table_name = $this->get_table_name('school_classes');
+            
+            // Add group_id column if it doesn't exist
+            $column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'group_id'");
+            if (empty($column_exists)) {
+                $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN group_id bigint(20) unsigned NULL AFTER teacher_id");
+            }
+            
+            // Add course_id column if it doesn't exist
+            $column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'course_id'");
+            if (empty($column_exists)) {
+                $wpdb->query("ALTER TABLE {$table_name} ADD COLUMN course_id bigint(20) unsigned NULL AFTER group_id");
+            }
+            
+            $this->update_db_version('1.2.0');
+        }
     }
 }

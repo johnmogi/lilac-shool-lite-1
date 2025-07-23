@@ -81,7 +81,7 @@ $classes_table->prepare_items();
 
 <?php
 // Include the teacher assignment modal at the end of the page
-require_once SCHOOL_MANAGER_LITE_DIR . 'templates/admin/modals/teacher-assignment-modal.php';
+require_once SCHOOL_MANAGER_LITE_PATH . 'templates/admin/modals/teacher-assignment-modal.php';
 ?>
 
 <script type="text/javascript">

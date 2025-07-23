@@ -53,9 +53,7 @@ add_action('plugins_loaded', function() {
     School_Manager_Lite::instance();
 });
 
-// Handle activation and deactivation
-register_activation_hook(__FILE__, 'school_manager_lite_activate');
-register_deactivation_hook(__FILE__, 'school_manager_lite_deactivate');
+
 
 /**
  * Class School_Manager_Lite
@@ -92,13 +90,11 @@ class School_Manager_Lite {
      * Initialize hooks.
      */
     private function init_hooks() {
-        register_activation_hook(__FILE__, array($this, 'activate'));
-        register_deactivation_hook(__FILE__, array($this, 'deactivate'));
-
-        add_action('plugins_loaded', array($this, 'load_textdomain'));
-        
         // Initialize database updates on plugins_loaded with higher priority
         add_action('plugins_loaded', array($this, 'init_database'), 5);
+        
+        // Load textdomain after database initialization
+        add_action('plugins_loaded', array($this, 'load_textdomain'));
     }
     
     /**
@@ -108,6 +104,9 @@ class School_Manager_Lite {
         // Initialize database
         require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-database.php';
         $database = new School_Manager_Lite_Database();
+        
+        // Create tables if they don't exist
+        $database->create_tables();
         
         // Run database updates if needed
         if (method_exists($database, 'maybe_update_database')) {
@@ -134,7 +133,8 @@ class School_Manager_Lite {
                 'includes/class-student-manager.php',
                 'includes/class-promo-code-manager.php',
                 'includes/class-shortcodes.php',
-                'includes/class-import-export.php'
+                'includes/class-import-export.php',
+                'includes/class-teacher-dashboard.php'
             );
             
             foreach ($core_files as $file) {
@@ -147,7 +147,6 @@ class School_Manager_Lite {
             if (is_admin()) {
                 $admin_files = array(
                     'includes/admin/class-admin.php',
-                    'includes/admin/class-teacher-dashboard.php',
                     'includes/admin/class-wizard.php',
                     'includes/admin/class-student-profile.php'
                 );
@@ -186,26 +185,22 @@ class School_Manager_Lite {
      * Plugin activation.
      */
     public function activate() {
-        require_once SCHOOL_MANAGER_LITE_PATH . 'includes/class-database.php';
-        $database = new School_Manager_Lite_Database();
-        $database->create_tables();
+        // Initialize database first
+        $this->init_database();
         
-        // Create custom roles if they don't exist
+        // Create custom roles
         $this->create_custom_roles();
         
         // Set default options
         update_option('school_manager_lite_version', SCHOOL_MANAGER_LITE_VERSION);
-        
-        // Ensure database is up to date
-        if (method_exists($database, 'maybe_update_database')) {
-            $database->maybe_update_database();
-        }
     }
-
+    
     /**
      * Plugin deactivation.
      */
     public function deactivate() {
+        // Clean up any temporary data or caches
+        delete_option('school_manager_lite_version');
         flush_rewrite_rules();
     }
 

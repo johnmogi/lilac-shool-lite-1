@@ -48,6 +48,7 @@ $teachers = $teacher_manager->get_teachers();
         <div class="modal-footer">
             <span class="spinner"></span>
             <button type="button" id="cancel-teacher-assign" class="button"><?php _e('Cancel', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">ביטול</span></button>
+            <button type="button" id="save-teacher-assign" class="button button-primary"><?php _e('Save Assignment', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">שמור השתייכות</span></button>
             <button type="button" id="assign-teacher-submit" class="button button-primary"><?php _e('Assign Teacher', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">שייך מורה</span></button>
         </div>
     </div>

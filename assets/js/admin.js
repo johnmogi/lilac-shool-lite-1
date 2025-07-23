@@ -177,6 +177,132 @@
     $(document).ready(function() {
         console.log('School Manager admin.js loaded');
         console.log('Body classes:', $('body').attr('class'));
+
+        // Teacher Assignment Modal
+        const teacherAssignmentModal = {
+            init: function() {
+                this.bindEvents();
+            },
+            
+            bindEvents: function() {
+                // Handle show teacher button click
+                $('.assign-teacher-button').on('click', function(e) {
+                    e.preventDefault();
+                    const classId = $(this).data('class-id');
+                    
+                    // Show loading
+                    $('#TB_ajaxContent').html('<div class="loading-spinner"></div>');
+                    
+                    // Get modal content via AJAX
+                    $.ajax({
+                        url: schoolManagerAjax.ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'get_teacher_assignment_modal',
+                            class_id: classId,
+                            nonce: schoolManagerAjax.nonce
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                // Update modal content
+                                $('#TB_ajaxContent').html(response.data.content);
+                                
+                                // Initialize modal handlers
+                                teacherAssignmentModal.initModalHandlers();
+                            } else {
+                                $('#TB_ajaxContent').html('<p>Error loading modal content</p>');
+                            }
+                        },
+                        error: function() {
+                            $('#TB_ajaxContent').html('<p>Error loading modal content</p>');
+                        }
+                    });
+                });
+                
+                // Close modal when X is clicked
+                $('.close-teacher-modal').on('click', this.closeModal.bind(this));
+                
+                // Close modal when cancel button is clicked
+                $('#cancel-teacher-assign').on('click', this.closeModal.bind(this));
+                
+                // Handle save assignment
+                $('#save-teacher-assign').on('click', this.saveAssignment.bind(this));
+                
+                // Handle teacher selection change
+                $('#teacher-id').on('change', this.updateAssignmentCount.bind(this));
+            },
+            
+            initModalHandlers: function() {
+                // Re-bind modal handlers since content was dynamically loaded
+                this.bindEvents();
+            },
+            
+            closeModal: function() {
+                tb_remove();
+            },
+            
+            updateAssignmentCount: function() {
+                const teacherId = $('#teacher-id').val();
+                const classIds = $('#selected-class-ids').val();
+                
+                if (!teacherId || !classIds) {
+                    $('#teacher-assignment-count').text('');
+                    return;
+                }
+                
+                const classCount = (classIds.match(/,/g) || []).length + 1;
+                $('#teacher-assignment-count').text(
+                    `${classCount} ${classCount === 1 ? 'class' : 'classes'} selected` +
+                    ' / ' +
+                    `<span lang="he" dir="rtl">${classCount} ${classCount === 1 ? 'כיתה' : 'כיתות'} נבחרו</span>`
+                );
+            },
+            
+            saveAssignment: function() {
+                const teacherId = $('#teacher-id').val();
+                const classId = $('#selected-class-ids').val();
+                
+                if (!teacherId || !classId) {
+                    alert('Please select both a teacher and at least one class');
+                    return;
+                }
+                
+                // Show spinner
+                $('.spinner').addClass('is-active');
+                
+                // Save via AJAX
+                $.ajax({
+                    url: schoolManagerAjax.ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'assign_teacher_to_class',
+                        teacher_id: teacherId,
+                        class_id: classId,
+                        nonce: schoolManagerAjax.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Teacher assigned successfully');
+                            // Close modal and reload page
+                            teacherAssignmentModal.closeModal();
+                            window.location.reload();
+                        } else {
+                            alert(response.data.message || 'Error assigning teacher');
+                        }
+                    },
+                    error: function() {
+                        alert('Error assigning teacher. Please try again.');
+                    },
+                    complete: function() {
+                        // Hide spinner
+                        $('.spinner').removeClass('is-active');
+                    }
+                });
+            }
+        };
+        
+        // Initialize teacher assignment modal
+        teacherAssignmentModal.init();
         
         // Always initialize Quick Edit on any admin page that might contain students list
         inlineEditStudent.init();

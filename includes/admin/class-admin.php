@@ -183,8 +183,8 @@ class School_Manager_Lite_Admin {
     public function add_admin_menu() {
         // Main menu item
         add_menu_page(
-            __('ניהול בית ספר', 'school-manager-lite'),
-            __('ניהול בית ספר', 'school-manager-lite'),
+            __('ניהול לילך', 'school-manager-lite'),
+            __('ניהול לילך', 'school-manager-lite'),
             'manage_options',
             'school-manager',
             array($this, 'render_dashboard_page'),

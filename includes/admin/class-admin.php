@@ -111,6 +111,15 @@ class School_Manager_Lite_Admin {
                 SCHOOL_MANAGER_LITE_VERSION,
                 true
             );
+            
+            // Enqueue the fixed teacher modal script
+            wp_enqueue_script(
+                'school-manager-teacher-modal-fix',
+                SCHOOL_MANAGER_LITE_URL . 'assets/js/teacher-modal-fix.js',
+                array('jquery'),
+                SCHOOL_MANAGER_LITE_VERSION,
+                true
+            );
         }
         
         // Enqueue class edit specific scripts
@@ -810,6 +819,17 @@ class School_Manager_Lite_Admin {
                 if ($result) {
                     $success_count++;
                     $updates[$class_id] = $teacher->display_name;
+                    
+                    // Connect instructor to LearnDash group
+                    if (class_exists('School_Manager_Lite_Instructor_Group_Connector')) {
+                        $connector = School_Manager_Lite_Instructor_Group_Connector::instance();
+                        $result = $connector->connect_instructor_to_group($teacher_id, $class_id);
+                        
+                        if (!is_wp_error($result)) {
+                            // Fire action hook
+                            do_action('school_manager_teacher_assigned_to_class', $teacher_id, $class_id);
+                        }
+                    }
                 } else {
                     $error_count++;
                 }
@@ -1252,29 +1272,22 @@ class School_Manager_Lite_Admin {
             ));
         }
         
-        // LearnDash Group Integration
+        // Instructor-Group Integration
         $group_connected = false;
         $group_message = '';
         
-        if (class_exists('School_Manager_Lite_LearnDash_Integration')) {
-            $learndash_integration = School_Manager_Lite_LearnDash_Integration::instance();
+        if (class_exists('School_Manager_Lite_Instructor_Group_Connector')) {
+            $connector = School_Manager_Lite_Instructor_Group_Connector::instance();
+            $result = $connector->connect_instructor_to_group($teacher_id, $class_id);
             
-            if ($learndash_integration->is_learndash_active()) {
-                // Create or get group for this class
-                $group_id = $learndash_integration->create_or_get_group_for_class($class_id, $class);
+            if (!is_wp_error($result)) {
+                $group_connected = true;
+                $group_message = sprintf(__('Instructor connected to LearnDash group for class: %s', 'school-manager-lite'), $class->name);
                 
-                if (!is_wp_error($group_id)) {
-                    // Assign teacher as group leader
-                    $teacher_assigned = $learndash_integration->assign_teacher_to_group($teacher_id, $group_id);
-                    
-                    if ($teacher_assigned) {
-                        $group_connected = true;
-                        $group_message = sprintf(__('Teacher assigned to LearnDash group: Class %s', 'school-manager-lite'), $class->name);
-                        
-                        // Fire action hook for other plugins
-                        do_action('school_manager_teacher_assigned_to_class', $teacher_id, $class_id);
-                    }
-                }
+                // Fire action hook for other plugins
+                do_action('school_manager_teacher_assigned_to_class', $teacher_id, $class_id);
+            } else {
+                $group_message = sprintf(__('Group connection failed: %s', 'school-manager-lite'), $result->get_error_message());
             }
         }
         

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instructor Dashboard Integration Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .main-site-header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .dashboard-container {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .dashboard-iframe {
+            width: 100%;
+            border: none;
+            min-height: 600px;
+            display: block;
+        }
+        
+        .integration-info {
+            background: #e8f4fd;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #007cba;
+        }
+        
+        .code-example {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-site-header">
+        <h1>🚗 Driving School Management System</h1>
+        <p>Main Website with Embedded Instructor Dashboard</p>
+    </div>
+    
+    <div class="integration-info">
+        <h2>📋 Integration Instructions</h2>
+        <p><strong>This example shows how to embed the instructor dashboard in your main website.</strong></p>
+        
+        <h3>1. Basic Iframe Integration:</h3>
+        <div class="code-example">
+&lt;iframe src="https://207lilac.local/wp-content/plugins/school-manager-lite/instructor-dashboard-iframe.php" 
+        width="100%" 
+        height="600" 
+        frameborder="0"
+        id="instructor-dashboard"&gt;
+&lt;/iframe&gt;
+        </div>
+        
+        <h3>2. With Auto-Resize (Recommended):</h3>
+        <div class="code-example">
+&lt;script&gt;
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'resize') {
+        document.getElementById('instructor-dashboard').style.height = event.data.height + 'px';
+    }
+});
+&lt;/script&gt;
+        </div>
+        
+        <h3>3. With User ID Parameter (for testing):</h3>
+        <div class="code-example">
+&lt;iframe src="https://207lilac.local/wp-content/plugins/school-manager-lite/instructor-dashboard-iframe.php?user_id=123"&gt;
+&lt;/iframe&gt;
+        </div>
+        
+        <p><strong>Features:</strong></p>
+        <ul>
+            <li>✅ Responsive design that works on mobile and desktop</li>
+            <li>✅ Auto-resizing iframe that adjusts to content height</li>
+            <li>✅ Secure - only shows data for logged-in wdm_instructor users</li>
+            <li>✅ Direct links to WordPress admin for quiz creation/editing</li>
+            <li>✅ Real-time statistics and class management</li>
+        </ul>
+    </div>
+    
+    <div class="dashboard-container">
+        <iframe src="https://207lilac.local/wp-content/plugins/school-manager-lite/instructor-dashboard-iframe.php" 
+                class="dashboard-iframe" 
+                id="instructor-dashboard">
+        </iframe>
+    </div>
+    
+    <div class="integration-info">
+        <h2>🔧 Next Steps to Complete Your System</h2>
+        <p><strong>Before using this dashboard, complete the final connections:</strong></p>
+        <ol>
+            <li><a href="https://207lilac.local/wp-content/plugins/school-manager-lite/final-connections.php" target="_blank">
+                <strong>Fix Final Connections</strong></a> - Connect teachers as group leaders and students to groups</li>
+            <li><strong>Test the system</strong> - Log in as a wdm_instructor user and create a quiz</li>
+            <li><strong>Embed in your main site</strong> - Use the iframe code above</li>
+        </ol>
+        
+        <p><strong>Available wdm_instructor users for testing:</strong></p>
+        <ul>
+            <li>Username: <code>0501234567</code> (David Cohen)</li>
+            <li>Username: <code>0512345678</code> (Eitan2 Goldman2)</li>
+            <li>Username: <code>97250938246</code> (Jonathan Moguillansky)</li>
+            <li>Username: <code>test.teacher</code> (Test Teacher)</li>
+            <li>Username: <code>testteacher3</code> (Bob Johnson)</li>
+        </ul>
+    </div>
+    
+    <script>
+        // Auto-resize iframe based on content
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'resize') {
+                const iframe = document.getElementById('instructor-dashboard');
+                iframe.style.height = event.data.height + 'px';
+            }
+        });
+        
+        // Set minimum height
+        document.addEventListener('DOMContentLoaded', function() {
+            const iframe = document.getElementById('instructor-dashboard');
+            iframe.style.minHeight = '600px';
+        });
+    </script>
+</body>
+</html>

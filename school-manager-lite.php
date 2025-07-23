@@ -134,7 +134,13 @@ class School_Manager_Lite {
                 'includes/class-promo-code-manager.php',
                 'includes/class-shortcodes.php',
                 'includes/class-import-export.php',
-                'includes/class-teacher-dashboard.php'
+                'includes/class-teacher-dashboard.php',
+                'includes/class-learndash-integration.php',
+                'includes/class-simple-group-connector.php',
+                'includes/class-basic-fixes.php',
+                'includes/class-instructor-quiz-connector.php',
+                'includes/class-instructor-quiz-manager.php',
+                'includes/class-instructor-dashboard-widget.php'
             );
             
             foreach ($core_files as $file) {

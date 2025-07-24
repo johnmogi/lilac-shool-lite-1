@@ -48,6 +48,66 @@ class School_Manager_Lite_Shortcodes {
     }
     
     /**
+     * Render student quiz status
+     * 
+     * Shortcode: [school_student_quiz_status student_id="" course_id=""]
+     * 
+     * @param array $atts Shortcode attributes
+     * @return string HTML output
+     */
+    public function render_student_quiz_status($atts) {
+        // Only allow logged-in users
+        if (!is_user_logged_in()) {
+            return '<div class="school-manager-notice">' . 
+                   __('Please log in to view quiz status.', 'school-manager-lite') . 
+                   '</div>';
+        }
+        
+        // Parse attributes
+        $atts = shortcode_atts(
+            array(
+                'student_id' => get_current_user_id(),
+                'course_id' => 0,
+            ),
+            $atts,
+            'school_student_quiz_status'
+        );
+        
+        // Check if current user can view this student's data
+        $current_user = wp_get_current_user();
+        $student_id = intval($atts['student_id']);
+        $course_id = intval($atts['course_id']);
+        
+        // Allow admins to view any student's data
+        if (!current_user_can('manage_options') && $current_user->ID != $student_id) {
+            // Check if current user is a teacher and the student is in their class
+            $is_teacher = in_array('school_teacher', (array) $current_user->roles) || 
+                         in_array('wdm_instructor', (array) $current_user->roles) ||
+                         in_array('instructor', (array) $current_user->roles);
+            
+            if ($is_teacher) {
+                $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
+                $students = $teacher_manager->get_teacher_students($current_user->ID);
+                $student_ids = wp_list_pluck($students, 'ID');
+                
+                if (!in_array($student_id, $student_ids)) {
+                    return '<div class="school-manager-notice">' . 
+                           __('You do not have permission to view this student\'s quiz status.', 'school-manager-lite') . 
+                           '</div>';
+                }
+            } else {
+                return '<div class="school-manager-notice">' . 
+                       __('You do not have permission to view this quiz status.', 'school-manager-lite') . 
+                       '</div>';
+            }
+        }
+        
+        // Get the quiz status
+        $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
+        return $teacher_manager->get_student_quiz_status($student_id, $course_id);
+    }
+    
+    /**
      * Register shortcodes.
      */
     public function register_shortcodes() {
@@ -58,6 +118,9 @@ class School_Manager_Lite_Shortcodes {
 
         // Shortcode to allow student to freeze / pause their enrollment
         add_shortcode('school_freeze_access', array($this, 'freeze_access_shortcode'));
+        
+        // Quiz status shortcode for students and teachers
+        add_shortcode('school_student_quiz_status', array($this, 'render_student_quiz_status'));
         
         // Shortcode for teachers to create promo codes
         add_shortcode('teacher_create_promo_codes', array($this, 'teacher_create_promo_codes_shortcode'));
@@ -315,8 +378,27 @@ class School_Manager_Lite_Shortcodes {
         }
         
         $current_user = wp_get_current_user();
-        if (!current_user_can('school_teacher') && !current_user_can('administrator')) {
-            return '<p>אין לך הרשאה ליצור קודי הטבה.</p>';
+        
+        // Check for various instructor and admin roles
+        $allowed_roles = array(
+            'administrator',
+            'school_teacher', 
+            'wdm_instructor',
+            'instructor',
+            'wdm_swd_instructor',
+            'swd_instructor'
+        );
+        
+        $has_permission = false;
+        foreach ($allowed_roles as $role) {
+            if (current_user_can($role) || in_array($role, $current_user->roles)) {
+                $has_permission = true;
+                break;
+            }
+        }
+        
+        if (!$has_permission) {
+            return '<p>אין לך הרשאה ליצור קודי הטבה. תפקיד נוכחי: ' . implode(', ', $current_user->roles) . '</p>';
         }
         
         // Parse attributes
@@ -345,28 +427,72 @@ class School_Manager_Lite_Shortcodes {
             )
         ));
         
-        // Get teacher's classes
+        // Get teacher's classes (or all classes for administrators)
         $class_manager = School_Manager_Lite_Class_Manager::instance();
-        $teacher_classes = $class_manager->get_classes(array('teacher_id' => $current_user->ID));
+        if (current_user_can('administrator')) {
+            // Administrators can see all classes or create new ones
+            $teacher_classes = $class_manager->get_classes(); // Get all classes
+        } else {
+            // Regular teachers see only their classes
+            $teacher_classes = $class_manager->get_classes(array('teacher_id' => $current_user->ID));
+        }
+        
+        // Debug info
+        $debug_info = '';
+        if (current_user_can('administrator')) {
+            $debug_info = '<div style="background: #f0f0f0; padding: 10px; margin: 10px 0; font-size: 12px;">';
+            $debug_info .= '<strong>Debug Info:</strong><br>';
+            $debug_info .= 'User ID: ' . $current_user->ID . '<br>';
+            $debug_info .= 'User Roles: ' . implode(', ', $current_user->roles) . '<br>';
+            $debug_info .= 'Classes Found: ' . count($teacher_classes) . '<br>';
+            if (!empty($teacher_classes)) {
+                $debug_info .= 'Class Names: ' . implode(', ', array_map(function($c) { return $c->name; }, $teacher_classes)) . '<br>';
+            }
+            $debug_info .= '</div>';
+        }
         
         ob_start();
         ?>
         <div class="<?php echo esc_attr($atts['class']); ?>">
             <h3><?php echo esc_html($atts['title']); ?></h3>
             
+            <?php echo $debug_info; ?>
+            
             <form id="teacher-promo-form" method="post">
                 <?php wp_nonce_field('teacher_create_promo_codes', 'teacher_promo_nonce'); ?>
                 
+                <!-- Class Selection or Creation -->
                 <div class="form-group">
-                    <label for="promo_class_id">בחר כיתה:</label>
-                    <select name="class_id" id="promo_class_id" required>
-                        <option value="">בחר כיתה</option>
-                        <?php foreach ($teacher_classes as $class): ?>
-                            <option value="<?php echo esc_attr($class->id); ?>">
-                                <?php echo esc_html($class->name); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label>בחר או צור כיתה:</label>
+                    
+                    <div style="margin-bottom: 10px;">
+                        <input type="radio" name="class_option" id="use_existing_class" value="existing" checked>
+                        <label for="use_existing_class" style="display: inline; margin-right: 10px;">בחר כיתה קיימת</label>
+                    </div>
+                    
+                    <div id="existing_class_section" style="margin-bottom: 15px;">
+                        <select name="class_id" id="promo_class_id">
+                            <option value="">בחר כיתה</option>
+                            <?php foreach ($teacher_classes as $class): ?>
+                                <option value="<?php echo esc_attr($class->id); ?>">
+                                    <?php echo esc_html($class->name); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if (empty($teacher_classes)): ?>
+                            <p style="color: #666; font-size: 12px; margin: 5px 0;">לא נמצאו כיתות קיימות. אנא צור כיתה חדשה.</p>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div style="margin-bottom: 10px;">
+                        <input type="radio" name="class_option" id="create_new_class" value="new">
+                        <label for="create_new_class" style="display: inline; margin-right: 10px;">צור כיתה חדשה</label>
+                    </div>
+                    
+                    <div id="new_class_section" style="display: none; margin-bottom: 15px;">
+                        <input type="text" name="new_class_name" id="new_class_name" placeholder="שם הכיתה החדשה" maxlength="100">
+                        <small style="display: block; color: #666; margin-top: 5px;">למשל: כיתה א' 2025, קבוצת בוקר, וכו'</small>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -386,10 +512,10 @@ class School_Manager_Lite_Shortcodes {
                 
                 <div class="form-group">
                     <label style="display: flex; align-items: center;">
-                        <input type="checkbox" name="create_learndash_group" id="create_learndash_group" value="1" style="margin-left: 8px;">
-                        צור קבוצת LearnDash חדשה עבור הכיתה
+                        <input type="checkbox" name="create_learndash_group" id="create_learndash_group" value="1" style="margin-left: 8px;" checked>
+                        צור קבוצת LearnDash אוטומטית
                     </label>
-                    <small style="color: #666; margin-top: 5px; display: block;">אם מסומן, תיווצר קבוצת LearnDash חדשה עם שם הכיתה</small>
+                    <small style="color: #666; margin-top: 5px; display: block;">מומלץ להשאיר מסומן לניהול טוב יותר של התלמידים</small>
                 </div>
                 
                 <input type="hidden" name="course_id" value="<?php echo esc_attr($atts['course_id']); ?>">
@@ -405,12 +531,42 @@ class School_Manager_Lite_Shortcodes {
         
         <script>
         jQuery(document).ready(function($) {
+            // Handle class option radio buttons
+            $('input[name="class_option"]').on('change', function() {
+                if ($(this).val() === 'existing') {
+                    $('#existing_class_section').show();
+                    $('#new_class_section').hide();
+                    $('#promo_class_id').prop('required', true);
+                    $('#new_class_name').prop('required', false);
+                } else {
+                    $('#existing_class_section').hide();
+                    $('#new_class_section').show();
+                    $('#promo_class_id').prop('required', false);
+                    $('#new_class_name').prop('required', true);
+                }
+            });
+            
             $('#teacher-promo-form').on('submit', function(e) {
                 e.preventDefault();
                 
                 var $form = $(this);
                 var $result = $('#promo-creation-result');
                 var $button = $form.find('button[type="submit"]');
+                
+                // Validate form
+                var classOption = $('input[name="class_option"]:checked').val();
+                var classId = $('#promo_class_id').val();
+                var newClassName = $('#new_class_name').val().trim();
+                
+                if (classOption === 'existing' && !classId) {
+                    $result.html('<div class="error-message" style="color: red; padding: 10px; border: 1px solid red; background: #fff0f0;">אנא בחר כיתה קיימת או צור כיתה חדשה.</div>');
+                    return;
+                }
+                
+                if (classOption === 'new' && !newClassName) {
+                    $result.html('<div class="error-message" style="color: red; padding: 10px; border: 1px solid red; background: #fff0f0;">אנא הזן שם לכיתה החדשה.</div>');
+                    return;
+                }
                 
                 $button.prop('disabled', true).text(teacher_promo_ajax.messages.creating);
                 $result.html('');
@@ -421,7 +577,9 @@ class School_Manager_Lite_Shortcodes {
                     data: {
                         action: 'teacher_create_promo_codes',
                         nonce: teacher_promo_ajax.nonce,
-                        class_id: $('#promo_class_id').val(),
+                        class_option: classOption,
+                        class_id: classId,
+                        new_class_name: newClassName,
                         quantity: $('#promo_quantity').val(),
                         prefix: $('#promo_prefix').val(),
                         expiry_date: $('#promo_expiry').val(),
@@ -500,12 +658,33 @@ class School_Manager_Lite_Shortcodes {
         }
         
         $current_user = wp_get_current_user();
-        if (!current_user_can('school_teacher') && !current_user_can('administrator')) {
-            wp_send_json_error('אין לך הרשאה ליצור קודי הטבה.');
+        
+        // Check for various instructor and admin roles
+        $allowed_roles = array(
+            'administrator',
+            'school_teacher', 
+            'wdm_instructor',
+            'instructor',
+            'wdm_swd_instructor',
+            'swd_instructor'
+        );
+        
+        $has_permission = false;
+        foreach ($allowed_roles as $role) {
+            if (current_user_can($role) || in_array($role, $current_user->roles)) {
+                $has_permission = true;
+                break;
+            }
+        }
+        
+        if (!$has_permission) {
+            wp_send_json_error('אין לך הרשאה ליצור קודי הטבה. תפקיד: ' . implode(', ', $current_user->roles));
         }
         
         // Sanitize and validate inputs
+        $class_option = isset($_POST['class_option']) ? sanitize_text_field($_POST['class_option']) : 'existing';
         $class_id = isset($_POST['class_id']) ? intval($_POST['class_id']) : 0;
+        $new_class_name = isset($_POST['new_class_name']) ? sanitize_text_field($_POST['new_class_name']) : '';
         $teacher_id = isset($_POST['teacher_id']) ? intval($_POST['teacher_id']) : 0;
         $quantity = isset($_POST['quantity']) ? max(1, min(50, intval($_POST['quantity']))) : 5;
         $prefix = isset($_POST['prefix']) ? sanitize_text_field($_POST['prefix']) : '';
@@ -513,21 +692,56 @@ class School_Manager_Lite_Shortcodes {
         $course_id = isset($_POST['course_id']) ? intval($_POST['course_id']) : 898;
         $create_group = isset($_POST['create_learndash_group']) && $_POST['create_learndash_group'] == '1';
         
-        // Validate required fields
-        if (empty($class_id)) {
-            wp_send_json_error('יש לבחור כיתה.');
-        }
-        
+        // Validate teacher ID
         if (empty($teacher_id) || $teacher_id !== $current_user->ID) {
             wp_send_json_error('שגיאה במזהה המורה.');
         }
         
-        // Verify teacher owns this class
         $class_manager = School_Manager_Lite_Class_Manager::instance();
-        $class = $class_manager->get_class($class_id);
+        $class = null;
         
-        if (!$class || intval($class->teacher_id) !== $current_user->ID) {
-            wp_send_json_error('אין לך הרשאה ליצור קודים עבור כיתה זו.');
+        // Handle class creation or selection
+        if ($class_option === 'new') {
+            // Create new class
+            if (empty($new_class_name)) {
+                wp_send_json_error('יש להזין שם לכיתה החדשה.');
+            }
+            
+            // Create the new class
+            $class_data = array(
+                'name' => $new_class_name,
+                'teacher_id' => $teacher_id,
+                'created_at' => current_time('mysql')
+            );
+            
+            $new_class_id = $class_manager->create_class($class_data);
+            if (is_wp_error($new_class_id)) {
+                wp_send_json_error('שגיאה ביצירת הכיתה: ' . $new_class_id->get_error_message());
+            }
+            
+            $class_id = $new_class_id;
+            $class = $class_manager->get_class($class_id);
+            
+        } else {
+            // Use existing class
+            if (empty($class_id)) {
+                wp_send_json_error('יש לבחור כיתה קיימת.');
+            }
+            
+            $class = $class_manager->get_class($class_id);
+            
+            // Verify teacher owns this class (administrators can use any class)
+            if (!$class) {
+                wp_send_json_error('כיתה לא נמצאה.');
+            }
+            
+            if (!current_user_can('administrator') && intval($class->teacher_id) !== $current_user->ID) {
+                wp_send_json_error('אין לך הרשאה ליצור קודים עבור כיתה זו.');
+            }
+        }
+        
+        if (!$class) {
+            wp_send_json_error('שגיאה בטעינת הכיתה.');
         }
         
         // Create LearnDash group if requested
@@ -556,6 +770,11 @@ class School_Manager_Lite_Shortcodes {
         
         // Return success with generated codes
         $message = sprintf('נוצרו %d קודי הטבה בהצלחה עבור כיתה %s', count($result), esc_html($class->name));
+        
+        if ($class_option === 'new') {
+            $message .= '<br>נוצרה גם כיתה חדשה: ' . esc_html($class->name);
+        }
+        
         if ($group_id) {
             $message .= '<br>נוצרה גם קבוצת LearnDash חדשה.';
         }

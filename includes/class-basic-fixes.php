@@ -37,6 +37,7 @@ class School_Manager_Lite_Basic_Fixes {
      * Add diagnostic menu
      */
     public function add_diagnostic_menu() {
+        // Only add the System Fixes menu item
         add_submenu_page(
             'school-manager',
             __('System Diagnostics & Fixes', 'school-manager-lite'),

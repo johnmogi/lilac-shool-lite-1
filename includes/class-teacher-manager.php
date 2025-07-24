@@ -297,6 +297,258 @@ class School_Manager_Lite_Teacher_Manager {
      * @param array $data Teacher data
      * @return int|WP_Error Teacher ID or WP_Error on failure
      */
+    /**
+     * Get quiz completion status for a student
+     *
+     * @param int $student_id Student ID
+     * @param int $course_id Optional course ID to filter by
+     * @return string HTML output with quiz completion status
+     */
+    public function get_student_quiz_status($student_id, $course_id = 0) {
+        // Check if LearnDash is active
+        if (!function_exists('learndash_get_course_quiz_list')) {
+            return '<div class="notice notice-error"><p>' . __('LearnDash is required for quiz functionality', 'school-manager-lite') . '</p></div>';
+        }
+
+        $output = '';
+        $quizzes_completed = 0;
+        $total_quizzes = 0;
+        $quiz_data = array();
+
+        // Get all courses the student is enrolled in
+        $enrolled_courses = array();
+        
+        if ($course_id) {
+            // If specific course is provided, use only that
+            $enrolled_courses = array($course_id);
+        } else {
+            // Get all enrolled courses
+            if (function_exists('ld_get_mycourses')) {
+                $enrolled_courses = ld_get_mycourses($student_id, array('fields' => 'ids'));
+            }
+        }
+
+        if (empty($enrolled_courses)) {
+            return '<div class="quiz-status"><p>' . __('No enrolled courses found.', 'school-manager-lite') . '</p></div>';
+        }
+
+        // Process each course
+        foreach ($enrolled_courses as $course_id) {
+            $course = get_post($course_id);
+            if (!$course) continue;
+
+            // Get all quizzes in the course
+            $quizzes = learndash_get_course_quiz_list($course_id, $student_id);
+            if (empty($quizzes)) continue;
+
+            foreach ($quizzes as $quiz) {
+                $quiz_id = $quiz['post']->ID;
+                $quiz_title = get_the_title($quiz_id);
+                $quiz_url = get_permalink($quiz_id);
+                $attempts = learndash_get_quiz_attempt($student_id, $quiz_id);
+                $score = 0;
+                $status = 'not-started';
+                $last_attempt = '';
+                $pass = false;
+
+                if (!empty($attempts)) {
+                    // Get the most recent attempt
+                    $attempt = end($attempts);
+                    $last_attempt = date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $attempt['time']);
+                    
+                    // Get the score
+                    if (isset($attempt['score'])) {
+                        $score = round($attempt['score'] * 100, 2) . '%';
+                    } elseif (isset($attempt['percentage_earned'])) {
+                        $score = round($attempt['percentage_earned'], 2) . '%';
+                    }
+                    
+                    // Check if passed
+                    $pass = (isset($attempt['pass']) && $attempt['pass'] == 1) || 
+                            (isset($attempt['rank']) && $attempt['rank'] === 'passed');
+                    
+                    $status = $pass ? 'passed' : 'failed';
+                    $quizzes_completed++;
+                }
+
+                $total_quizzes++;
+                
+                $quiz_data[] = array(
+                    'course_id' => $course_id,
+                    'course_title' => get_the_title($course_id),
+                    'quiz_id' => $quiz_id,
+                    'quiz_title' => $quiz_title,
+                    'quiz_url' => $quiz_url,
+                    'status' => $status,
+                    'score' => $score,
+                    'last_attempt' => $last_attempt,
+                    'pass' => $pass
+                );
+            }
+        }
+
+        // Calculate completion percentage
+        $completion_percentage = $total_quizzes > 0 ? round(($quizzes_completed / $total_quizzes) * 100) : 0;
+
+        // Start building output
+        ob_start();
+        ?>
+        <div class="school-manager-quiz-status">
+            <div class="quiz-summary">
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: <?php echo esc_attr($completion_percentage); ?>%;">
+                        <span><?php echo esc_html($completion_percentage); ?>%</span>
+                    </div>
+                </div>
+                <div class="quiz-stats">
+                    <span class="stat"><?php 
+                        echo sprintf(
+                            _n('%d of %d quiz completed', '%d of %d quizzes completed', $total_quizzes, 'school-manager-lite'),
+                            $quizzes_completed,
+                            $total_quizzes
+                        ); 
+                    ?></span>
+                    <span class="stat"><?php echo esc_html($completion_percentage); ?>% <?php _e('Complete', 'school-manager-lite'); ?></span>
+                </div>
+            </div>
+
+            <?php if (!empty($quiz_data)) : ?>
+                <div class="quiz-details">
+                    <h4><?php _e('Quiz Details', 'school-manager-lite'); ?></h4>
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr>
+                                <th><?php _e('Course', 'school-manager-lite'); ?></th>
+                                <th><?php _e('Quiz', 'school-manager-lite'); ?></th>
+                                <th><?php _e('Status', 'school-manager-lite'); ?></th>
+                                <th><?php _e('Score', 'school-manager-lite'); ?></th>
+                                <th><?php _e('Last Attempt', 'school-manager-lite'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($quiz_data as $quiz) : 
+                                $status_class = 'status-' . $quiz['status'];
+                                $status_text = '';
+                                
+                                switch($quiz['status']) {
+                                    case 'passed':
+                                        $status_text = __('Passed', 'school-manager-lite');
+                                        $status_icon = '✓';
+                                        break;
+                                    case 'failed':
+                                        $status_text = __('Failed', 'school-manager-lite');
+                                        $status_icon = '✗';
+                                        break;
+                                    default:
+                                        $status_text = __('Not Started', 'school-manager-lite');
+                                        $status_icon = '—';
+                                }
+                            ?>
+                                <tr>
+                                    <td><?php echo esc_html($quiz['course_title']); ?></td>
+                                    <td>
+                                        <a href="<?php echo esc_url($quiz['quiz_url']); ?>" target="_blank">
+                                            <?php echo esc_html($quiz['quiz_title']); ?>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="quiz-status-badge <?php echo esc_attr($status_class); ?>" title="<?php echo esc_attr($status_text); ?>">
+                                            <?php echo esc_html($status_icon); ?>
+                                        </span>
+                                        <?php echo esc_html($status_text); ?>
+                                    </td>
+                                    <td><?php echo $quiz['status'] !== 'not-started' ? esc_html($quiz['score']) : '—'; ?></td>
+                                    <td><?php echo $quiz['last_attempt'] ? esc_html($quiz['last_attempt']) : '—'; ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else : ?>
+                <p><?php _e('No quiz data found for this student.', 'school-manager-lite'); ?></p>
+            <?php endif; ?>
+        </div>
+        <style>
+            .school-manager-quiz-status {
+                margin: 20px 0;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+            }
+            .quiz-summary {
+                background: #f8f9fa;
+                border: 1px solid #e2e4e7;
+                border-radius: 4px;
+                padding: 20px;
+                margin-bottom: 20px;
+            }
+            .progress-container {
+                height: 24px;
+                background: #e9ecef;
+                border-radius: 12px;
+                margin-bottom: 10px;
+                overflow: hidden;
+            }
+            .progress-bar {
+                height: 100%;
+                background: #2271b1;
+                color: white;
+                text-align: center;
+                line-height: 24px;
+                font-size: 12px;
+                font-weight: 600;
+                transition: width 0.6s ease;
+                min-width: 40px;
+            }
+            .quiz-stats {
+                display: flex;
+                justify-content: space-between;
+                font-size: 13px;
+                color: #646970;
+            }
+            .quiz-details h4 {
+                margin: 20px 0 10px;
+                font-size: 14px;
+                font-weight: 600;
+                color: #1d2327;
+            }
+            .quiz-status-badge {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                margin-right: 5px;
+                font-size: 12px;
+                line-height: 1;
+            }
+            .status-passed {
+                background: #00a32a;
+                color: white;
+            }
+            .status-failed {
+                background: #d63638;
+                color: white;
+            }
+            .status-not-started {
+                background: #f0f0f1;
+                color: #646970;
+            }
+            .wp-list-table th, .wp-list-table td {
+                padding: 12px;
+            }
+        </style>
+        <?php
+        
+        return ob_get_clean();
+    }
+
+    /**
+     * Update teacher
+     *
+     * @param int $teacher_id Teacher ID
+     * @param array $data Teacher data
+     * @return int|WP_Error Teacher ID or WP_Error on failure
+     */
     public function update_teacher($teacher_id, $data) {
         $teacher = $this->get_teacher($teacher_id);
 

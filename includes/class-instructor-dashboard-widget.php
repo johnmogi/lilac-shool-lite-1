@@ -41,16 +41,10 @@ class School_Manager_Lite_Instructor_Dashboard_Widget {
     
     /**
      * Add admin menu
+     * Removed broken menu item - functionality may be available elsewhere
      */
     public function add_admin_menu() {
-        add_submenu_page(
-            'school-manager',
-            __('Dashboard Widget', 'school-manager-lite'),
-            __('Dashboard Widget', 'school-manager-lite'),
-            'edit_posts',
-            'instructor-dashboard-widget',
-            array($this, 'admin_page')
-        );
+        // Menu item removed - functionality may be available in other admin pages
     }
     
     /**

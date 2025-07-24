@@ -49,16 +49,10 @@ class School_Manager_Lite_Instructor_Quiz_Manager {
     
     /**
      * Add admin menu
+     * Menu item removed as it's non-functional
      */
     public function add_admin_menu() {
-        add_submenu_page(
-            'school-manager',
-            __('Instructor Quiz Manager', 'school-manager-lite'),
-            __('Quiz Manager', 'school-manager-lite'),
-            'edit_posts',
-            'instructor-quiz-manager',
-            array($this, 'admin_page')
-        );
+        // Menu item removed - functionality may be available in other admin pages
     }
     
     /**

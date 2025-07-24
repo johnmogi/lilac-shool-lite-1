@@ -143,8 +143,27 @@ class School_Manager_Lite_Class_Manager {
 
         // Check if teacher exists and is valid
         $teacher = get_user_by('id', $data['teacher_id']);
-        if (!$teacher || !in_array('school_teacher', (array) $teacher->roles)) {
-            return new WP_Error('invalid_teacher', __('Invalid teacher ID', 'school-manager-lite'));
+        $valid_roles = array(
+            'administrator',
+            'school_teacher', 
+            'wdm_instructor',
+            'instructor',
+            'wdm_swd_instructor',
+            'swd_instructor'
+        );
+        $has_valid_role = false;
+        
+        if ($teacher) {
+            foreach ($valid_roles as $role) {
+                if (in_array($role, (array) $teacher->roles)) {
+                    $has_valid_role = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!$teacher || !$has_valid_role) {
+            return new WP_Error('invalid_teacher', __('Invalid teacher ID or insufficient permissions. User roles: ' . implode(', ', $teacher ? $teacher->roles : array()), 'school-manager-lite'));
         }
 
         $table_name = $wpdb->prefix . 'school_classes';

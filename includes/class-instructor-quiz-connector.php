@@ -38,16 +38,10 @@ class School_Manager_Lite_Instructor_Quiz_Connector {
     
     /**
      * Add admin menu
+     * Removed broken menu item - functionality may be available elsewhere
      */
     public function add_admin_menu() {
-        add_submenu_page(
-            'school-manager',
-            __('Instructor Quiz Setup', 'school-manager-lite'),
-            __('Instructor Quiz Setup', 'school-manager-lite'),
-            'manage_options',
-            'instructor-quiz-setup',
-            array($this, 'admin_page')
-        );
+        // Menu item removed - functionality may be available in other admin pages
     }
     
     /**

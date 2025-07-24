@@ -82,6 +82,17 @@ class School_Manager_Lite_Wizard_Classes_List_Table extends WP_List_Table {
                 return !empty($item->description) ? esc_html($item->description) : '—';
             case 'date_created':
                 return date_i18n(get_option('date_format'), strtotime($item->created_at));
+            case 'teacher':
+                if (empty($item->teacher_id)) {
+                    return '—';
+                }
+                $teacher = get_user_by('id', $item->teacher_id);
+                return $teacher ? esc_html($teacher->display_name) : __('Unknown Teacher', 'school-manager-lite');
+            case 'students':
+                return sprintf(
+                    _n('%d student', '%d students', $item->student_count, 'school-manager-lite'),
+                    $item->student_count
+                );
             default:
                 return isset($item->$column_name) ? $item->$column_name : '';
         }
@@ -152,46 +163,49 @@ class School_Manager_Lite_Wizard_Classes_List_Table extends WP_List_Table {
         // Column headers
         $this->_column_headers = array($columns, $hidden, $sortable);
 
-        // Get data
-        $class_manager = School_Manager_Lite_Class_Manager::instance();
-
         // Handle search
         $search = isset($_REQUEST['s']) ? sanitize_text_field($_REQUEST['s']) : '';
         
         // Handle sorting
-        $orderby = isset($_REQUEST['orderby']) ? sanitize_text_field($_REQUEST['orderby']) : 'name';
+        $orderby = isset($_REQUEST['orderby']) ? sanitize_text_field($_REQUEST['orderby']) : 'title';
         $order = isset($_REQUEST['order']) ? sanitize_text_field($_REQUEST['order']) : 'ASC';
         
-        // Query args
+        // Query args for LearnDash groups
         $args = array(
-            'orderby' => $orderby,
-            'order'   => $order,
+            'post_type'      => 'groups',
+            'posts_per_page' => -1,
+            'post_status'    => 'publish',
+            'orderby'        => 'title',
+            'order'          => $order,
+            's'              => $search,
         );
-        
+
+        // If teacher ID is provided, get groups for that teacher
         if ($this->teacher_id > 0) {
-            $args['teacher_id'] = $this->teacher_id;
+            $args['author'] = $this->teacher_id;
+        }
+
+        // Get all groups
+        $groups = get_posts($args);
+        
+        // Format the groups to match expected format
+        $formatted_groups = array();
+        foreach ($groups as $group) {
+            $formatted_group = new stdClass();
+            $formatted_group->id = $group->ID;
+            $formatted_group->name = $group->post_title;
+            $formatted_group->description = $group->post_content;
+            $formatted_group->teacher_id = $group->post_author;
+            $formatted_group->created_at = $group->post_date;
+            
+            // Count students in this group
+            $group_users = learndash_get_groups_user_ids($group->ID);
+            $formatted_group->student_count = is_array($group_users) ? count($group_users) : 0;
+            
+            $formatted_groups[] = $formatted_group;
         }
         
-        if (!empty($search)) {
-            $args['search'] = $search;
-        }
-
-        // Get all classes
-        $data = $class_manager->get_classes($args);
-
-        // Pagination
-        $per_page = 10;
-        $current_page = $this->get_pagenum();
-        $total_items = count($data);
-
-        $this->set_pagination_args(array(
-            'total_items' => $total_items,
-            'per_page'    => $per_page,
-            'total_pages' => ceil($total_items / $per_page)
-        ));
-
-        // Slice data for pagination
-        $this->items = array_slice($data, (($current_page - 1) * $per_page), $per_page);
+        $this->items = $formatted_groups;
     }
 
     /**

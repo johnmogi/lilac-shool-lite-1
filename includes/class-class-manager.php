@@ -44,56 +44,67 @@ class School_Manager_Lite_Class_Manager {
     }
 
     /**
-     * Get classes
+     * Get classes (LearnDash groups)
      *
      * @param array $args Query arguments
      * @return array Array of class objects
      */
     public function get_classes($args = array()) {
-        global $wpdb;
-        
         $defaults = array(
-            'teacher_id' => 0, // Filter by teacher
-            'orderby' => 'name', 
+            'teacher_id' => '', // Filter by teacher/author (empty = all teachers)
+            'orderby' => 'title',
             'order' => 'ASC',
             'limit' => -1,
             'offset' => 0,
+            'search' => '',
         );
 
         $args = wp_parse_args($args, $defaults);
-        $table_name = $wpdb->prefix . 'school_classes';
         
-        $query = "SELECT * FROM {$table_name} WHERE 1=1";
-        $query_args = array();
+        // Build query args for get_posts
+        $query_args = array(
+            'post_type'      => 'groups',
+            'posts_per_page' => $args['limit'],
+            'offset'         => $args['offset'],
+            'post_status'    => 'publish',
+            'orderby'        => $args['orderby'],
+            'order'          => $args['order'],
+            's'              => $args['search'],
+        );
         
-        if (!empty($args['teacher_id'])) {
-            $query .= " AND teacher_id = %d";
-            $query_args[] = $args['teacher_id'];
+        // Handle teacher/author filter
+        if (isset($args['teacher_id']) && $args['teacher_id'] !== '') {
+            if ($args['teacher_id'] == 0) {
+                // Get groups with no author assigned
+                $query_args['author__in'] = array(0);
+            } else {
+                // Filter by specific teacher/author
+                $query_args['author'] = $args['teacher_id'];
+            }
+        }
+        // If teacher_id is empty string (default), get all groups (don't add author filter)
+        
+        // Get groups
+        $groups = get_posts($query_args);
+        $formatted_groups = array();
+        
+        foreach ($groups as $group) {
+            $formatted_group = new stdClass();
+            $formatted_group->id = $group->ID;
+            $formatted_group->name = $group->post_title;
+            $formatted_group->description = $group->post_content;
+            $formatted_group->teacher_id = $group->post_author;
+            $formatted_group->created_at = $group->post_date;
+            
+            // Get student count
+            $group_users = function_exists('learndash_get_groups_user_ids') ? 
+                learndash_get_groups_user_ids($group->ID) : array();
+            $formatted_group->student_count = is_array($group_users) ? count($group_users) : 0;
+            
+            $formatted_groups[] = $formatted_group;
         }
         
-        // Order
-        $allowed_order_fields = array('name', 'id', 'created_at');
-        $orderby = in_array($args['orderby'], $allowed_order_fields) ? $args['orderby'] : 'name';
-        $order = $args['order'] === 'DESC' ? 'DESC' : 'ASC';
-        
-        $query .= " ORDER BY {$orderby} {$order}";
-        
-        // Limit
-        if ($args['limit'] > 0) {
-            $query .= " LIMIT %d OFFSET %d";
-            $query_args[] = $args['limit'];
-            $query_args[] = $args['offset'];
-        }
-        
-        // Prepare query if needed
-        if (!empty($query_args)) {
-            $query = $wpdb->prepare($query, $query_args);
-        }
-        
-        // Execute query
-        $results = $wpdb->get_results($query);
-        
-        return is_array($results) ? $results : array();
+        return $formatted_groups;
     }
 
     /**

@@ -542,17 +542,19 @@ class School_Manager_Lite_Admin_Wizard {
         if (!empty($_POST['class_id'])) {
             $class_id = absint($_POST['class_id']);
             
-            // Verify the class exists
-            $class_manager = School_Manager_Lite_Class_Manager::instance();
-            $class = $class_manager->get_class($class_id);
+            // Verify the group exists
+            $group = get_post($class_id);
             
-            if ($class) {
+            if ($group && $group->post_type === 'groups') {
                 // Store class ID for next step
                 update_option('school_manager_wizard_class_id', $class_id, false);
                 
-                // If the teacher is different, update the class to be assigned to this teacher
-                if ($teacher_id && $class->teacher_id != $teacher_id) {
-                    $class_manager->update_class($class_id, array('teacher_id' => $teacher_id));
+                // If the teacher is different, update the group author
+                if ($teacher_id && $group->post_author != $teacher_id) {
+                    wp_update_post(array(
+                        'ID' => $class_id,
+                        'post_author' => $teacher_id
+                    ));
                 }
                 
                 wp_safe_redirect($this->get_next_step_url());
@@ -562,17 +564,23 @@ class School_Manager_Lite_Admin_Wizard {
         
         // Handle new class creation
         if (!empty($_POST['class_name']) && !empty($_POST['teacher_id'])) {
-            $class_manager = School_Manager_Lite_Class_Manager::instance();
-            
-            $class_id = $class_manager->create_class(array(
-                'name' => sanitize_text_field($_POST['class_name']),
-                'description' => isset($_POST['class_description']) ? sanitize_textarea_field($_POST['class_description']) : '',
-                'teacher_id' => $teacher_id,
+            // Create new LearnDash group
+            $group_id = wp_insert_post(array(
+                'post_title'   => sanitize_text_field($_POST['class_name']),
+                'post_content' => isset($_POST['class_description']) ? sanitize_textarea_field($_POST['class_description']) : '',
+                'post_status'  => 'publish',
+                'post_type'    => 'groups',
+                'post_author'  => $teacher_id,
             ));
             
-            if (!is_wp_error($class_id)) {
+            if (!is_wp_error($group_id)) {
                 // Store class ID for next step
-                update_option('school_manager_wizard_class_id', $class_id, false);
+                update_option('school_manager_wizard_class_id', $group_id, false);
+                
+                // Set the group leader if this is a teacher
+                if (function_exists('ld_update_leader_group_access')) {
+                    ld_update_leader_group_access($teacher_id, $group_id);
+                }
                 
                 wp_safe_redirect($this->get_next_step_url());
                 exit;

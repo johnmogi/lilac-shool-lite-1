@@ -526,7 +526,7 @@ class School_Manager_Lite_Teacher_Manager {
         $classes = $this->get_teacher_classes($current_user_id);
         
         if (empty($classes)) {
-            echo '<p>' . __('You have no classes assigned.', 'school-manager-lite') . '</p>';
+            echo '<p>' . __('', 'school-manager-lite') . '</p>';
             return;
         }
         

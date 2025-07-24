@@ -35,17 +35,10 @@ class School_Manager_Lite_Basic_Fixes {
     
     /**
      * Add diagnostic menu
+     * Menu item removed as it's non-functional
      */
     public function add_diagnostic_menu() {
-        // Only add the System Fixes menu item
-        add_submenu_page(
-            'school-manager',
-            __('System Diagnostics & Fixes', 'school-manager-lite'),
-            __('System Fixes', 'school-manager-lite'),
-            'manage_options',
-            'school-manager-fixes',
-            array($this, 'diagnostic_page')
-        );
+        // Menu item removed - functionality may be available in other admin pages
     }
     
     /**

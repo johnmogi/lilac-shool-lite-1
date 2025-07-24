@@ -181,6 +181,23 @@ class School_Manager_Lite {
             if (class_exists('School_Manager_Lite_Shortcodes')) {
                 $this->shortcodes = School_Manager_Lite_Shortcodes::instance();
             }
+            
+            // Initialize additional classes
+            if (class_exists('School_Manager_Lite_Basic_Fixes')) {
+                School_Manager_Lite_Basic_Fixes::instance();
+            }
+            
+            if (class_exists('School_Manager_Lite_Instructor_Quiz_Connector')) {
+                School_Manager_Lite_Instructor_Quiz_Connector::instance();
+            }
+            
+            if (class_exists('School_Manager_Lite_Instructor_Quiz_Manager')) {
+                School_Manager_Lite_Instructor_Quiz_Manager::instance();
+            }
+            
+            if (class_exists('School_Manager_Lite_Instructor_Dashboard_Widget')) {
+                School_Manager_Lite_Instructor_Dashboard_Widget::instance();
+            }
         }
         
         // Log plugin loading status

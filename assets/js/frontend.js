@@ -69,8 +69,12 @@
                         // Reset form
                         $form[0].reset();
                         
-                        // Redirect if URL provided
-                        if (school_manager_lite.redirect_url) {
+                        // Redirect after successful login
+                        if (response.data.redirect) {
+                            setTimeout(function() {
+                                window.location.href = response.data.redirect;
+                            }, 2000);
+                        } else if (school_manager_lite.redirect_url) {
                             setTimeout(function() {
                                 window.location.href = school_manager_lite.redirect_url;
                             }, 2000);

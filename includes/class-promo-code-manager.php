@@ -561,17 +561,17 @@ class School_Manager_Lite_Promo_Code_Manager {
         $promo = $this->get_promo_code_by_code($code);
         
         if (!$promo) {
-            return new WP_Error('invalid_code', __('Invalid promo code', 'school-manager-lite'));
+            return new WP_Error('invalid_code', __('קוד לא תקין', 'school-manager-lite'));
         }
         
         // Check if code has reached its usage limit
         if ($promo->used_count >= $promo->usage_limit) {
-            return new WP_Error('code_limit_reached', __('This promo code has reached its usage limit', 'school-manager-lite'));
+            return new WP_Error('code_limit_reached', __('קוד זה הגיע למגבלת השימוש', 'school-manager-lite'));
         }
         
         // Check if code is already used (for single-use codes)
         if ($promo->usage_limit == 1 && $promo->used_count > 0) {
-            return new WP_Error('code_already_used', __('This promo code has already been used', 'school-manager-lite'));
+            return new WP_Error('code_already_used', __('קוד זה כבר נוצל', 'school-manager-lite'));
         }
         
         // Check if student_id is already linked to a promo code
@@ -581,14 +581,14 @@ class School_Manager_Lite_Promo_Code_Manager {
                 // Check if this user already has a promo code
                 $existing_promo = $this->get_user_promo_code($existing_user->ID);
                 if ($existing_promo) {
-                    return new WP_Error('user_has_promo', __('This student already has a promo code assigned', 'school-manager-lite'));
+                    return new WP_Error('user_has_promo', __('לתלמיד זה כבר יש קוד קופון', 'school-manager-lite'));
                 }
             }
         }
         
         // Check if code is expired
         if (!empty($promo->expiry_date) && strtotime($promo->expiry_date) < time()) {
-            return new WP_Error('code_expired', __('This promo code has expired', 'school-manager-lite'));
+            return new WP_Error('code_expired', __('קוד זה פג תוקף', 'school-manager-lite'));
         }
         
         // Use the code - link it to the student if provided
@@ -608,7 +608,7 @@ class School_Manager_Lite_Promo_Code_Manager {
             $student = $student_manager->get_student($student_id);
             
             if (!$student) {
-                return new WP_Error('invalid_student', __('Invalid student ID', 'school-manager-lite'));
+                return new WP_Error('invalid_student', __('מזהה תלמיד לא תקין', 'school-manager-lite'));
             }
             
             $update_data['student_id'] = $student_id;
@@ -617,7 +617,7 @@ class School_Manager_Lite_Promo_Code_Manager {
         else if (!empty($student_data)) {
             // Make sure required fields are provided
             if (empty($student_data['student_name']) || empty($student_data['username']) || empty($student_data['password'])) {
-                return new WP_Error('missing_student_data', __('Student name, phone number (username), and ID (password) are required', 'school-manager-lite'));
+                return new WP_Error('missing_student_data', __('שם תלמיד, מספר טלפון ותעודת זהות דרושים', 'school-manager-lite'));
             }
             
             // Check if student ID (password) already exists to prevent duplicates
@@ -630,7 +630,7 @@ class School_Manager_Lite_Promo_Code_Manager {
             ]);
             
             if (!empty($existing_user)) {
-                return new WP_Error('duplicate_student_id', __('A student with this ID already exists. Please use a different ID.', 'school-manager-lite'));
+                return new WP_Error('duplicate_student_id', __('תלמיד עם תעודת זהות זו כבר קיים במערכת', 'school-manager-lite'));
             }
             
             // Additional duplicate check in custom student table is skipped because the table does not store a separate student_id column.
@@ -724,13 +724,292 @@ class School_Manager_Lite_Promo_Code_Manager {
 
         // Determine LearnDash course ID (fallback 898)
         $ld_course_id = 898;
-        if ( $class && isset( $class->course_id ) && $class->course_id ) {
+        
+        // Use course_id from student_data if provided (highest priority)
+        if ( !empty($student_data['course_id']) && intval($student_data['course_id']) > 0 ) {
+            $ld_course_id = intval($student_data['course_id']);
+        }
+        // Otherwise use class course_id if available
+        else if ( $class && isset( $class->course_id ) && $class->course_id ) {
             $ld_course_id = (int) $class->course_id;
         }
 
         // Enroll in LearnDash – must use the WP user ID
         if ( function_exists( 'ld_update_course_access' ) && $wp_user_id && $ld_course_id ) {
+            // ULTRA-COMPREHENSIVE COURSE ACCESS CONTROL
+            // This ensures ONLY the specified course is accessible and blocks ALL others
+            
+            error_log('School Manager Lite: Starting ULTRA-comprehensive course access control for user ' . $wp_user_id . ' - TARGET COURSE: ' . $ld_course_id);
+            
+            // Step 1: Get all courses in the system
+            $all_courses = get_posts(array(
+                'post_type' => 'sfwd-courses',
+                'posts_per_page' => -1,
+                'post_status' => array('publish', 'private', 'draft'),
+                'fields' => 'ids'
+            ));
+            
+            error_log('School Manager Lite: Found ' . count($all_courses) . ' total courses to process.');
+            
+            // Step 2: NUCLEAR OPTION - Remove ALL course access using EVERY method
+            foreach ($all_courses as $course_id) {
+                // Method 1: Use LearnDash's access control (remove access)
+                ld_update_course_access( $wp_user_id, $course_id, /* remove */ true );
+                
+                // Method 2: Remove from course's user access list in post meta
+                $course_access_list = get_post_meta($course_id, 'course_access_list', true);
+                if (is_array($course_access_list)) {
+                    $course_access_list = array_diff($course_access_list, array($wp_user_id, (string)$wp_user_id));
+                    update_post_meta($course_id, 'course_access_list', $course_access_list);
+                } else {
+                    // Ensure it's an empty array, not containing the user
+                    update_post_meta($course_id, 'course_access_list', array());
+                }
+                
+                // Method 3: Remove ALL course-specific user meta
+                delete_user_meta($wp_user_id, 'course_' . $course_id . '_access_from');
+                delete_user_meta($wp_user_id, 'course_' . $course_id . '_access_until');
+                delete_user_meta($wp_user_id, 'learndash_course_expired_' . $course_id);
+                delete_user_meta($wp_user_id, 'course_completed_' . $course_id);
+                delete_user_meta($wp_user_id, 'learndash_course_' . $course_id . '_access_from');
+                delete_user_meta($wp_user_id, 'learndash_course_' . $course_id . '_access_until');
+                delete_user_meta($wp_user_id, '_sfwd-course_' . $course_id . '_access_from');
+                delete_user_meta($wp_user_id, '_sfwd-course_' . $course_id . '_access_until');
+                
+                // Method 4: Remove from any group course access
+                delete_user_meta($wp_user_id, 'learndash_group_enrolled_' . $course_id);
+                delete_user_meta($wp_user_id, 'learndash_group_users_' . $course_id);
+            }
+            
+            // Step 3: NUCLEAR CLEANUP - Clear ALL LearnDash data
+            delete_user_meta($wp_user_id, '_sfwd-course_progress');
+            delete_user_meta($wp_user_id, 'learndash_course_info');
+            delete_user_meta($wp_user_id, '_learndash_course_enrollment');
+            delete_user_meta($wp_user_id, 'learndash_group_users');
+            delete_user_meta($wp_user_id, 'learndash_user_groups');
+            delete_user_meta($wp_user_id, 'course_access_list');
+            
+            // ENHANCED: Remove ALL group access using database query
+            global $wpdb;
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key LIKE %s",
+                $wp_user_id, 'learndash_group_users_%'
+            ));
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key LIKE %s",
+                $wp_user_id, 'learndash_group_enrolled_%'
+            ));
+            
+            error_log('School Manager Lite: ENHANCED - Removed ALL group access via database query for user ' . $wp_user_id);
+            
+            // ENHANCED: Remove ALL course access metadata using database queries
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key LIKE %s",
+                $wp_user_id, 'course_%_access_%'
+            ));
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key LIKE %s",
+                $wp_user_id, 'learndash_course_%'
+            ));
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key LIKE %s",
+                $wp_user_id, '_sfwd-course_%'
+            ));
+            
+            error_log('School Manager Lite: ENHANCED - Removed ALL course access metadata via database query for user ' . $wp_user_id);
+            
+            // ENHANCED: Clear LearnDash user cache to prevent cached access data
+            if (function_exists('learndash_user_clear_data')) {
+                learndash_user_clear_data($wp_user_id);
+                error_log('School Manager Lite: ENHANCED - Cleared LearnDash user cache for user ' . $wp_user_id);
+            }
+            
+            // ENHANCED: Verify all group access was removed
+            $remaining_group_meta = $wpdb->get_results( $wpdb->prepare(
+                "SELECT meta_key FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key LIKE %s",
+                $wp_user_id, 'learndash_group_users_%'
+            ));
+            
+            if (!empty($remaining_group_meta)) {
+                error_log('School Manager Lite: WARNING - Some group access meta still exists: ' . print_r($remaining_group_meta, true));
+            } else {
+                error_log('School Manager Lite: SUCCESS - ALL group access metadata confirmed removed for user ' . $wp_user_id);
+            }
+            
+            // Step 4: Force ALL courses to 'closed' access (prevent open enrollment)
+            foreach ($all_courses as $course_id) {
+                $price_type = get_post_meta($course_id, '_ld_price_type', true);
+                if (empty($price_type) || $price_type === 'open' || $price_type === 'free') {
+                    update_post_meta($course_id, '_ld_price_type', 'closed');
+                    error_log('School Manager Lite: FORCED course ' . $course_id . ' to CLOSED access (was: ' . $price_type . ')');
+                }
+                
+                // Also ensure course access mode is set correctly
+                update_post_meta($course_id, '_ld_course_access_list', 'closed');
+            }
+            
+            // Step 5: GRANT access ONLY to the TARGET course
             ld_update_course_access( $wp_user_id, $ld_course_id, /* remove */ false );
+            
+            // Step 6: EXPLICITLY add user to the TARGET course's access list
+            $target_course_access = get_post_meta($ld_course_id, 'course_access_list', true);
+            if (!is_array($target_course_access)) {
+                $target_course_access = array();
+            }
+            // Add both integer and string versions to be safe
+            if (!in_array($wp_user_id, $target_course_access)) {
+                $target_course_access[] = $wp_user_id;
+            }
+            if (!in_array((string)$wp_user_id, $target_course_access)) {
+                $target_course_access[] = (string)$wp_user_id;
+            }
+            update_post_meta($ld_course_id, 'course_access_list', $target_course_access);
+            
+            // Step 7: Set explicit course access meta for target course
+            update_user_meta($wp_user_id, 'course_' . $ld_course_id . '_access_from', time());
+            update_user_meta($wp_user_id, 'learndash_course_' . $ld_course_id . '_access_from', time());
+            
+            error_log('School Manager Lite: SUCCESSFULLY granted access ONLY to course ' . $ld_course_id . ' for user ' . $wp_user_id . ' - ALL OTHER COURSES BLOCKED');
+            
+            // ENHANCED: Final verification - check that ONLY target course access exists
+            $final_course_meta = $wpdb->get_results( $wpdb->prepare(
+                "SELECT meta_key, meta_value FROM {$wpdb->usermeta} WHERE user_id = %d AND (meta_key LIKE %s OR meta_key LIKE %s OR meta_key LIKE %s)",
+                $wp_user_id, 'course_%_access_%', 'learndash_course_%', '_sfwd-course_%'
+            ));
+            
+            $target_course_found = false;
+            $other_courses_found = array();
+            
+            foreach ($final_course_meta as $meta) {
+                if (strpos($meta->meta_key, '_' . $ld_course_id . '_') !== false || 
+                    strpos($meta->meta_key, '_' . $ld_course_id) !== false) {
+                    $target_course_found = true;
+                } else {
+                    $other_courses_found[] = $meta->meta_key;
+                }
+            }
+            
+            if ($target_course_found && empty($other_courses_found)) {
+                error_log('School Manager Lite: VERIFICATION SUCCESS - User ' . $wp_user_id . ' has access ONLY to target course ' . $ld_course_id);
+            } else {
+                error_log('School Manager Lite: VERIFICATION WARNING - Target found: ' . ($target_course_found ? 'YES' : 'NO') . ', Other courses: ' . print_r($other_courses_found, true));
+            }
+            
+            // Set course access expiration to June 30th of next year
+            $current_year = date('Y');
+            $current_date = date('Y-m-d');
+            
+            // If we're past June 30th this year, set expiration to next year
+            if ($current_date > $current_year . '-06-30') {
+                $expiration_year = $current_year + 1;
+            } else {
+                $expiration_year = $current_year;
+            }
+            
+            $expiration_date = $expiration_year . '-06-30 23:59:59';
+            
+            // Set course access expiration using LearnDash meta
+            if (function_exists('learndash_user_course_access_from_update')) {
+                // Use LearnDash's built-in expiration system
+                $course_access_list = get_user_meta($wp_user_id, '_sfwd-course_progress', true);
+                if (!is_array($course_access_list)) {
+                    $course_access_list = array();
+                }
+                
+                if (!isset($course_access_list[$ld_course_id])) {
+                    $course_access_list[$ld_course_id] = array();
+                }
+                
+                $course_access_list[$ld_course_id]['access_from'] = time();
+                $course_access_list[$ld_course_id]['access_until'] = strtotime($expiration_date);
+                
+                update_user_meta($wp_user_id, '_sfwd-course_progress', $course_access_list);
+            }
+            
+            // Also set a custom meta for our own tracking
+            update_user_meta($wp_user_id, 'school_course_expiration_' . $ld_course_id, $expiration_date);
+            
+            $promo_access_data = array(
+                'course_id' => $ld_course_id,
+                'expires' => $expiration_date,
+                'granted_at' => current_time('mysql')
+            );
+            
+            update_user_meta($wp_user_id, 'school_promo_course_access', $promo_access_data);
+            
+            // VERIFY the meta was set correctly
+            $verify_meta = get_user_meta($wp_user_id, 'school_promo_course_access', true);
+            error_log('School Manager Lite: VERIFICATION - Promo access meta set for user ' . $wp_user_id . ': ' . print_r($verify_meta, true));
+            
+            // Also set the user role to student_private if not already set
+            $user = get_user_by('ID', $wp_user_id);
+            if ($user && !in_array('student_private', $user->roles)) {
+                $user->set_role('student_private');
+                error_log('School Manager Lite: Set user ' . $wp_user_id . ' role to student_private');
+            } else {
+                error_log('School Manager Lite: User ' . $wp_user_id . ' already has correct role or user not found');
+            }
+            
+            error_log('School Manager Lite: Enrolled user ' . $wp_user_id . ' in course ' . $ld_course_id . ' with expiration ' . $expiration_date);
+            
+            // ENHANCED: Connect student to teacher and group from promo code
+            if ($promo->teacher_id && $wp_user_id) {
+                // Set teacher assignment for this student
+                update_user_meta($wp_user_id, 'school_assigned_teacher', $promo->teacher_id);
+                
+                // Also create reverse mapping - teacher to students
+                $teacher_students = get_user_meta($promo->teacher_id, 'school_teacher_students', true);
+                if (!is_array($teacher_students)) {
+                    $teacher_students = array();
+                }
+                if (!in_array($wp_user_id, $teacher_students)) {
+                    $teacher_students[] = $wp_user_id;
+                    update_user_meta($promo->teacher_id, 'school_teacher_students', $teacher_students);
+                }
+                
+                // CRITICAL: Insert into school_teacher_students table for shortcodes to work
+                $teacher_student_table = $wpdb->prefix . 'school_teacher_students';
+                
+                // Check if relationship already exists
+                $existing = $wpdb->get_var($wpdb->prepare(
+                    "SELECT id FROM {$teacher_student_table} WHERE teacher_id = %d AND student_id = %d",
+                    $promo->teacher_id, $student_id
+                ));
+                
+                if (!$existing) {
+                    $wpdb->insert(
+                        $teacher_student_table,
+                        array(
+                            'teacher_id' => $promo->teacher_id,
+                            'student_id' => $student_id,
+                            'class_id' => $promo->class_id,
+                            'created_at' => current_time('mysql')
+                        ),
+                        array('%d', '%d', '%d', '%s')
+                    );
+                    
+                    error_log('School Manager Lite: Inserted teacher-student relationship into database table - Teacher: ' . $promo->teacher_id . ', Student: ' . $student_id);
+                }
+                
+                error_log('School Manager Lite: Connected student ' . $wp_user_id . ' to teacher ' . $promo->teacher_id);
+            }
+            
+            // ENHANCED: Connect student to class/group if class has a group
+            if ($class && $class->group_id && $wp_user_id) {
+                // Add student to LearnDash group
+                if (function_exists('ld_update_group_access')) {
+                    ld_update_group_access($wp_user_id, $class->group_id, false); // false = add access
+                    error_log('School Manager Lite: Added student ' . $wp_user_id . ' to LearnDash group ' . $class->group_id);
+                }
+                
+                // Set group meta for student
+                update_user_meta($wp_user_id, 'school_assigned_group', $class->group_id);
+                
+                // Set group users meta (LearnDash format)
+                update_user_meta($wp_user_id, 'learndash_group_users_' . $class->group_id, $class->group_id);
+                
+                error_log('School Manager Lite: Connected student ' . $wp_user_id . ' to group ' . $class->group_id);
+            }
         }
         
         do_action('school_manager_lite_after_redeem_promo_code', $promo->id, $student_id, $class);
@@ -739,6 +1018,7 @@ class School_Manager_Lite_Promo_Code_Manager {
             'success' => true,
             'promo_code' => $promo,
             'student_id' => $student_id,
+            'wp_user_id' => $wp_user_id,
             'class' => $class
         );
     }

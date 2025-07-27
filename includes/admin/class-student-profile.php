@@ -59,7 +59,7 @@ class School_Manager_Lite_Student_Profile {
         wp_enqueue_style('school-manager-admin', SCHOOL_MANAGER_LITE_PLUGIN_URL . 'assets/css/admin.css', array(), SCHOOL_MANAGER_LITE_VERSION);
         
         // Add custom admin JS
-        wp_enqueue_script('school-manager-admin', SCHOOL_MANAGER_LITE_PLUGIN_URL . 'assets/js/admin.js', array('jquery', 'select2'), SCHOOL_MANAGER_LITE_VERSION, true);
+        wp_enqueue_script('school-manager-admin', SCHOOL_MANAGER_LITE_PLUGIN_URL . 'assets/js/admin.js', array('jquery', 'select2'), SCHOOL_MANAGER_LITE_VERSION . '.' . time(), true);
     }
     
     /**

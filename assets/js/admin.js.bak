@@ -1,0 +1,664 @@
+/**
+ * School Manager Lite Admin JavaScript
+ *
+ * @package School_Manager_Lite
+ * @since 1.0.0
+ */
+
+(function($) {
+    'use strict';
+    
+    // Ensure schoolManagerLite is defined
+    window.schoolManagerLite = window.schoolManagerLite || {};
+    schoolManagerLite.i18n = schoolManagerLite.i18n || {};
+    
+    // Quick Edit functionality
+    // Expose globally so inline scripts in list table can access it
+    window.inlineEditStudent = {
+        init: function() {
+            const self = this;
+            
+            // Quick Edit button click - use delegated event handling for dynamically added elements
+            $(document).on('click', '.editinline', function(e) {
+                e.preventDefault();
+                console.log('Quick Edit link clicked (delegated)', this);
+                self.edit(this);
+                return false;
+            });
+            
+            // Cancel button click
+            $('#student-quick-edit .cancel').on('click', function() {
+                inlineEditStudent.revert();
+                return false;
+            });
+            
+            // Save/Update button click
+            $('#student-quick-edit .save').on('click', function() {
+                inlineEditStudent.save(this);
+                return false;
+            });
+            
+            // Handle row clicks
+            $('#the-list').on('click', function(e) {
+                let target = $(e.target);
+                let row = target.closest('tr');
+                
+                // If the clicked element is in the quick edit row, do nothing
+                if (row.attr('id') === 'student-quick-edit') {
+                    return;
+                }
+                
+                // If clicking outside a quick edit form that's open, close it
+                if (row.attr('id') !== 'student-quick-edit' && $('#student-quick-edit').is(':visible')) {
+                    inlineEditStudent.revert();
+                }
+            });
+            
+            // Handle page clicks (close quick edit when clicking outside)
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#the-list').length && $('#student-quick-edit').is(':visible')) {
+                    inlineEditStudent.revert();
+                }
+            });
+        },
+        
+        // Edit a student
+        edit: function(element) {
+            try {
+                // Get the student row
+                const editRow = $('#student-quick-edit');
+                if (editRow.length === 0) {
+                    console.error('Quick edit row not found!');
+                    return;
+                }
+                
+                const studentRow = $(element).closest('tr');
+                if (studentRow.length === 0) {
+                    console.error('Student row not found!');
+                    return;
+                }
+                
+                console.log('Element:', element);
+                console.log('Data attribute:', $(element).data());
+                
+                // Try to get student data
+                let studentData = $(element).data('student');
+                if (!studentData) {
+                    // Try parsing data from HTML attribute as fallback
+                    try {
+                        const dataAttr = $(element).attr('data-student');
+                        if (dataAttr) {
+                            studentData = JSON.parse(dataAttr);
+                        }
+                    } catch(err) {
+                        console.error('Error parsing student data:', err);
+                    }
+                }
+                
+                if (!studentData) {
+                    console.error('Student data not found!');
+                    alert('Error: Student data not found. Please refresh the page and try again.');
+                    return;
+                }
+                
+                console.log('Student data:', studentData);
+                
+                // Position the quick edit row
+                editRow.attr('style', '');
+                studentRow.after(editRow);
+                
+                // Populate quick edit fields
+                $('#quick-edit-student-id').val(studentData.id);
+                $('#quick-edit-student-name').text(studentData.name);
+                $('#quick-edit-class-id').val(studentData.class_id);
+                
+                // Hide the student row and show edit row
+                studentRow.hide();
+                editRow.show();
+                
+                // Focus first field
+                $('#quick-edit-class-id').focus();
+            } catch(err) {
+                console.error('Error in edit function:', err);
+                alert('Error opening Quick Edit. Please check the browser console for details.');
+            }
+        },
+        
+        // Save student changes
+        save: function(element) {
+            // Show spinner
+            $('#student-quick-edit .spinner').addClass('is-active');
+            
+            // Get form data
+            const studentId = $('#quick-edit-student-id').val();
+            const classId = $('#quick-edit-class-id').val();
+            const status = $('#quick-edit-status').val();
+            
+            // Save via AJAX
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'quick_edit_student',
+                    student_id: studentId,
+                    class_id: classId,
+                    status: status,
+                    nonce: $('#school_manager_quick_edit_nonce').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Reload the page to show updated data
+                        window.location.reload();
+                    } else {
+                        alert(response.data.message || 'Error updating student');
+                        inlineEditStudent.revert();
+                    }
+                },
+                error: function() {
+                    alert('Error updating student. Please try again.');
+                    inlineEditStudent.revert();
+                }
+            });
+        },
+        
+        // Revert/cancel quick edit
+        revert: function() {
+            // Hide quick edit row
+            const editRow = $('#student-quick-edit');
+            editRow.hide();
+            
+            // Show the student row that was being edited
+            editRow.prev('tr').show();
+            
+            // Hide spinner
+            $('#student-quick-edit .spinner').removeClass('is-active');
+        }
+    };
+    // Ensure legacy plugins/themes referring to global var also work
+    var inlineEditStudent = window.inlineEditStudent;
+    
+    // Document ready
+    $(document).ready(function() {
+        console.log('School Manager admin.js loaded');
+        console.log('Body classes:', $('body').attr('class'));
+
+        // Teacher Assignment Modal
+        var teacherAssignmentModal = {
+            init: function() {
+                this.bindEvents();
+            },
+            
+            bindEvents: function() {
+                var self = this;
+                
+                // Handle click on assign teacher group button
+                $(document).on('click', '.assign-teacher-group', function(e) {
+                    e.preventDefault();
+                    self.openModal($(this));
+                });
+                
+                // Handle show teacher button click
+                $('.assign-teacher-button').on('click', function(e) {
+                    e.preventDefault();
+                    const classId = $(this).data('class-id');
+                    
+                    // Show loading
+                    $('#TB_ajaxContent').html('<div class="loading-spinner"></div>');
+                    
+                    // Get modal content via AJAX
+                    $.ajax({
+                        url: schoolManagerLite.ajax_url || ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'get_teacher_assignment_modal',
+                            class_id: classId,
+                            nonce: schoolManagerAjax.nonce
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                // Update modal content
+                                $('#TB_ajaxContent').html(response.data.content);
+                                
+                                // Initialize modal handlers
+                                teacherAssignmentModal.initModalHandlers();
+                            } else {
+                                $('#TB_ajaxContent').html('<p>Error loading modal content</p>');
+                            }
+                        },
+                        error: function() {
+                            $('#TB_ajaxContent').html('<p>Error loading modal content</p>');
+                        }
+                    });
+                });
+                
+                // Close modal when X is clicked
+                $('.close-teacher-modal').on('click', this.closeModal.bind(this));
+                
+                // Close modal when cancel button is clicked
+                $('#cancel-teacher-assign').on('click', this.closeModal.bind(this));
+                
+                // Handle save assignment
+                $('#save-teacher-assign').on('click', this.saveAssignment.bind(this));
+                
+                // Handle teacher selection change
+                $('#teacher-id').on('change', this.updateAssignmentCount.bind(this));
+            },
+            
+            initModalHandlers: function() {
+                // Re-bind modal handlers since content was dynamically loaded
+                this.bindEvents();
+            },
+            
+            closeModal: function() {
+                tb_remove();
+            },
+            
+            updateAssignmentCount: function() {
+                const teacherId = $('#teacher-id').val();
+                const classIds = $('#selected-class-ids').val();
+                
+                if (!teacherId || !classIds) {
+                    $('#teacher-assignment-count').text('');
+                    return;
+                }
+                
+                const classCount = (classIds.match(/,/g) || []).length + 1;
+                $('#teacher-assignment-count').text(
+                    `${classCount} ${classCount === 1 ? 'class' : 'classes'} selected` +
+                    ' / ' +
+                    `<span lang="he" dir="rtl">${classCount} ${classCount === 1 ? 'כיתה' : 'כיתות'} נבחרו</span>`
+                );
+            },
+            
+            saveAssignment: function() {
+                const teacherId = $('#teacher-id').val();
+                const classId = $('#selected-class-ids').val();
+                
+                if (!teacherId || !classId) {
+                    alert('Please select both a teacher and at least one class');
+                    return;
+                }
+                
+                // Show spinner
+                $('.spinner').addClass('is-active');
+                
+                // Save via AJAX
+                $.ajax({
+                    url: schoolManagerAdmin.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'assign_teacher_to_class',
+                        teacher_id: teacherId,
+                        class_id: classId,
+                        nonce: schoolManagerAdmin.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Teacher assigned successfully');
+                            // Close modal and reload page
+                            teacherAssignmentModal.closeModal();
+                            window.location.reload();
+                        } else {
+                            alert(response.data.message || 'Error assigning teacher');
+                        }
+                    },
+                    error: function() {
+                        alert('Error assigning teacher. Please try again.');
+                    },
+                    complete: function() {
+                        // Hide spinner
+                        $('.spinner').removeClass('is-active');
+                    }
+                });
+            }
+        };
+        
+        // Initialize teacher assignment modal
+        teacherAssignmentModal.init();
+        
+        // Ensure schoolManagerLite is defined
+        if (typeof schoolManagerLite === 'undefined') {
+            console.error('schoolManagerLite is not defined. Make sure to localize the script with wp_localize_script().');
+            return;
+        }
+        
+        // Teacher Assignment Modal Functions
+        var teacherAssignmentModal = {
+            openModal: function($button) {
+                var teacherId = $button.data('teacher-id');
+                var teacherName = $button.data('teacher-name') || '';
+                var originalText = $button.html();
+                
+                // Show loading state
+                $button.html('<span class="spinner is-active"></span> ' + 
+                    (schoolManagerLite.i18n.loading || 'Loading...'));
+                
+                // Create modal container if it doesn't exist
+                var $modalContainer = $('#teacher-group-assignment-modal');
+                if ($modalContainer.length === 0) {
+                    $modalContainer = $(
+                        '<div id="teacher-group-assignment-modal" style="display:none;">' +
+                        '  <div id="teacher-group-assignment-content"></div>' +
+                        '</div>'
+                    ).appendTo('body');
+                }
+                
+                // Set up cleanup on modal close
+                var cleanup = function() {
+                    $modalContainer.remove();
+                    $button.html(originalText);
+                    $(document).off('tb_unload', cleanup);
+                };
+                
+                // Show the thickbox
+                var modalTitle = schoolManagerLite.i18n.assignGroupsTo || 'Assign Groups to';
+                modalTitle += ' ' + teacherName;
+                
+                tb_show(modalTitle, '#' + $modalContainer.attr('id'));
+                
+                // Make AJAX request to get the form
+                $.ajax({
+                    url: schoolManagerLite.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'get_teacher_group_assignment_form',
+                        teacher_id: teacherId,
+                        nonce: schoolManagerLite.nonce
+                    },
+                    beforeSend: function() {
+                        $modalContainer.html('<p class="description">' + 
+                            (schoolManagerLite.i18n.loading || 'Loading...') + '</p>');
+                    },
+                    success: function(response, status, xhr) {
+                        console.log('AJAX request successful', {
+                            status: xhr.status,
+                            statusText: xhr.statusText,
+                            response: response,
+                            responseText: xhr.responseText
+                        });
+                        
+                        $button.html(originalText);
+                        
+                        var $content = $('#teacher-group-assignment-content');
+                        
+                        try {
+                            // Check if response is already HTML or JSON with data property
+                            var htmlContent = '';
+                            if (typeof response === 'string') {
+                                // Direct HTML response
+                                htmlContent = response;
+                            } else if (response && response.success) {
+                                // JSON response with data property
+                                htmlContent = response.data || '';
+                            } else {
+                                // Handle unexpected response format
+                                console.error('Unexpected response format:', response);
+                                throw new Error('Invalid response format');
+                            }
+                            
+                            // Update the content
+                            $content.html(htmlContent);
+                            
+                            // Handle form submission
+                            $content.find('form').on('submit', function(e) {
+                                e.preventDefault();
+                                
+                                var $form = $(this);
+                                var $submitButton = $form.find('button[type="submit"], input[type="submit"]').first();
+                                var originalButtonText = $submitButton.html() || $submitButton.val();
+                                
+                                // Show loading state
+                                $submitButton.prop('disabled', true).html(
+                                    '<span class="spinner is-active"></span> ' + 
+                                    (schoolManagerLite.i18n.saving || 'Saving...')
+                                );
+                                
+                                // Clear previous messages
+                                $form.find('.notice').remove();
+                                
+                                // Submit form via AJAX
+                                $.ajax({
+                                    url: schoolManagerLite.ajax_url,
+                                    type: 'POST',
+                                    data: $form.serialize(),
+                                    success: function(response) {
+                                        if (response && response.success) {
+                                            // Show success message
+                                            $form.prepend('<div class="notice notice-success"><p>' + 
+                                                (response.data && response.data.message ? response.data.message : 
+                                                (schoolManagerLite.i18n.settingsSaved || 'Settings saved successfully.')) + 
+                                                '</p></div>');
+                                            
+                                            // Close the thickbox after 1.5 seconds
+                                            setTimeout(function() {
+                                                tb_remove();
+                                                $modalContainer.remove();
+                                                
+                                                // Refresh the page to show updated groups
+                                                window.location.reload();
+                                            }, 1500);
+                                        } else {
+                                            // Show error message
+                                            var errorMessage = response && response.data && response.data.message ? 
+                                                response.data.message : 
+                                                (schoolManagerLite.i18n.errorSaving || 'Error saving settings.');
+                                                
+                                            $form.prepend('<div class="notice notice-error"><p>' + 
+                                                errorMessage + '</p></div>');
+                                        }
+                                    },
+                                    error: function(xhr, status, error) {
+                                        // Show error message
+                                        $form.prepend('<div class="notice notice-error"><p>' + 
+                                            (schoolManagerLite.i18n.errorSaving || 'Error saving settings. Please try again.') + 
+                                            '</p></div>');
+                                    },
+                                    complete: function() {
+                                        // Restore button state
+                                        $submitButton.prop('disabled', false).html(originalButtonText);
+                                        
+                                        // Scroll to top to show messages
+                                        $('html, body').animate({
+                                            scrollTop: $form.offset().top - 50
+                                        }, 300);
+                                    }
+                                });
+                            });
+                            
+                            // Remove loading spinner
+                            $content.siblings('h2').find('.spinner').remove();
+                            
+                        } catch (e) {
+                            console.error('Error processing response:', e);
+                            $content.html('<div class="notice notice-error"><p>' + 
+                                (schoolManagerLite.i18n.errorLoadingForm || 'Error: Could not load the form. Please try again.') + 
+                                '</p></div>');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $button.html(originalText);
+                        console.error('AJAX Error:', status, error, xhr);
+                        
+                        var errorMessage = 'Error loading form. Please try again.';
+                        
+                        try {
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                errorMessage = xhr.responseJSON.message;
+                            } else if (xhr.responseText) {
+                                var jsonResponse = JSON.parse(xhr.responseText);
+                                if (jsonResponse && jsonResponse.message) {
+                                    errorMessage = jsonResponse.message;
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error parsing error response:', e);
+                        }
+                        
+                        $('#teacher-group-assignment-content').html(
+                            '<div class="notice notice-error"><p>' + 
+                            (schoolManagerLite.i18n.errorLoadingForm || errorMessage) + 
+                            '</p></div>'
+                        );
+                        (schoolManagerLite.i18n.errorLoadingForm || errorMessage) + 
+                        '</p></div>'
+                    );
+                    
+                    // Remove loading spinner if it exists
+                    $content.siblings('h2').find('.spinner').remove();
+                }
+            });
+            
+            // Clean up on modal close
+            $('#TB_window').on('tb_unload', function() {
+                if ($modalContainer) {
+                    $modalContainer.remove();
+                }
+            });
+        },
+        
+        // Handle save group assignment
+        $(document).on('click', '.save-group-assignment', function() {
+            const $button = $(this);
+            const teacherId = $button.data('teacher-id');
+            const $modal = $button.closest('.teacher-group-assignment');
+            const $spinner = $modal.find('.spinner');
+            
+            // Get selected group IDs
+            const groupIds = [];
+            $modal.find('input[name="group_ids[]"]:checked').each(function() {
+                groupIds.push($(this).val());
+            });
+            
+            // Show spinner and disable button
+            $spinner.addClass('is-active');
+            $button.prop('disabled', true);
+            
+            // Create a temporary message container if it doesn't exist
+            let $messageContainer = $modal.find('.message-container');
+        
+            // Close thickbox when clicking outside
+            $(document).on('click', '#TB_overlay', function() {
+                tb_remove();
+            });
+        });
+        
+        // Always initialize Quick Edit on any admin page that might contain students list
+        inlineEditStudent.init();
+        console.log('Quick Edit initialized');
+        
+        // Log if we can find Quick Edit elements
+        console.log('Quick Edit links found:', $('.editinline').length);
+        console.log('Quick Edit form found:', $('#student-quick-edit').length);
+        // Common form handling for add/edit forms
+        $('.school-manager-form').each(function() {
+            const $form = $(this);
+            
+            // Toggle visibility of forms when buttons are clicked
+            $form.find('.toggle-form').on('click', function(e) {
+                e.preventDefault();
+                $form.slideToggle();
+            });
+            
+            // Hide forms when cancel buttons are clicked
+            $form.find('.cancel-form').on('click', function(e) {
+                e.preventDefault();
+                $form.slideUp();
+            });
+        });
+        
+        // Copy promo code to clipboard
+        $('.copy-code').on('click', function() {
+            const code = $(this).data('code');
+            
+            // Use modern clipboard API if available
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(function() {
+                    alert('Promo code copied to clipboard: ' + code);
+                }).catch(function() {
+                    // Fallback for browsers that don't support clipboard API
+                    fallbackCopyToClipboard(code);
+                });
+            } else {
+                fallbackCopyToClipboard(code);
+            }
+        });
+        
+        });
+        
+        // Handle save group assignment
+        handleGroupAssignment: function() {
+            const $button = $(this);
+            const teacherId = $button.data('teacher-id');
+            // Implementation would go here
+        }
+    };
+    
+    // Initialize teacher assignment modal
+    teacherAssignmentModal.init();
+    
+    // Fallback copy to clipboard function
+    function fallbackCopyToClipboard(text) {
+            const $temp = $('<input>');
+            $('body').append($temp);
+            $temp.val(text).select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    alert('Promo code copied to clipboard: ' + text);
+                } else {
+                    alert('Failed to copy promo code. Please copy it manually: ' + text);
+                }
+            } catch (err) {
+                alert('Failed to copy promo code. Please copy it manually: ' + text);
+            }
+            
+            $temp.remove();
+        }
+        
+        // Initialize Select2 for student profile page
+        if ($('.school-manager-student-profile').length) {
+            // Initialize class selection
+            $('#school_classes').select2({
+                placeholder: school_manager_lite_vars.i18n.select_classes || 'Select classes',
+                allowClear: true,
+                width: '100%'
+            });
+            
+            // Initialize teacher selection
+            $('#school_teacher').select2({
+                placeholder: school_manager_lite_vars.i18n.select_teacher || 'Select a teacher',
+                allowClear: true,
+                width: '100%'
+            });
+            
+            // Handle class selection change to update available teachers
+            $('#school_classes').on('change', function() {
+                const selectedClasses = $(this).val() || [];
+                
+                if (selectedClasses.length > 0) {
+                    // Enable teacher selection
+                    $('#school_teacher').prop('disabled', false);
+                    
+                    // If we want to filter teachers by selected classes in the future
+                    // we can make an AJAX call here to get teachers for the selected classes
+                } else {
+                    // Disable teacher selection if no classes are selected
+                    $('#school_teacher').val(null).trigger('change');
+                    $('#school_teacher').prop('disabled', true);
+                }
+            });
+            
+            // Trigger change on page load to set initial state
+            $('#school_classes').trigger('change');
+        }
+        
+        // Date picker for expiry date fields (if datepicker is available)
+        if ($.datepicker) {
+            $('input[type="date"]').datepicker({
+                dateFormat: 'yy-mm-dd'
+            });
+        }
+    });
+    
+})(jQuery);

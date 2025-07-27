@@ -38,6 +38,253 @@ class School_Manager_Lite_Admin {
     /**
      * Constructor.
      */
+    /**
+     * AJAX handler to get the teacher group assignment form
+     */
+    public function ajax_get_teacher_group_assignment_form() {
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'school_manager_ajax')) {
+            wp_send_json_error(array('message' => __('Security check failed', 'school-manager-lite')));
+            wp_die();
+        }
+        
+        // Check user capabilities
+        if (!current_user_can('edit_users')) {
+            wp_send_json_error(array('message' => __('Insufficient permissions', 'school-manager-lite')));
+            wp_die();
+        }
+        
+        // Get and validate teacher ID
+        $teacher_id = isset($_POST['teacher_id']) ? intval($_POST['teacher_id']) : 0;
+        if (!$teacher_id) {
+            wp_send_json_error(array('message' => __('Invalid teacher ID', 'school-manager-lite')));
+            wp_die();
+        }
+        
+        // Get the teacher's name for the form title
+        $teacher = get_userdata($teacher_id);
+        $teacher_name = $teacher ? $teacher->display_name : '';
+        
+        // Get all LearnDash groups
+        $groups = get_posts(array(
+            'post_type' => 'groups',
+            'posts_per_page' => -1,
+            'orderby' => 'title',
+            'order' => 'ASC',
+            'post_status' => 'publish',
+        ));
+        
+        // Debug: Log the groups being retrieved
+        error_log('School Manager Debug - Found ' . count($groups) . ' LearnDash groups');
+        foreach ($groups as $group) {
+            error_log('School Manager Debug - Group ID: ' . $group->ID . ', Title: ' . $group->post_title);
+        }
+        
+        // Ensure we have an array of group IDs for the current teacher
+        if (empty($current_groups)) {
+            $current_groups = array();
+        }
+        
+        // Get teacher's current groups
+        $current_groups = learndash_get_administrators_group_ids($teacher_id, true);
+        if (!is_array($current_groups)) {
+            $current_groups = array();
+        }
+        
+        // Start output buffering and ensure no output before this
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        ob_start();
+        ?>
+        <div class="teacher-group-assignment-form">
+            <form id="teacher-group-assignment-form" method="post">
+                <input type="hidden" name="action" value="assign_teacher_to_groups">
+                <input type="hidden" name="teacher_id" value="<?php echo esc_attr($teacher_id); ?>">
+                <?php wp_nonce_field('school_manager_ajax', 'nonce'); ?>
+                
+                <div class="inside">
+                    <p><?php _e('Select the groups this teacher should be an administrator of:', 'school-manager-lite'); ?></p>
+                    
+                    <div class="group-checkboxes" style="max-height: 400px; overflow-y: auto; margin: 15px 0; padding: 10px; border: 1px solid #ddd; background: #fff;">
+                        <?php if (!empty($groups)) : ?>
+                            <ul style="list-style: none; margin: 0; padding: 0;">
+                                <?php foreach ($groups as $group) : 
+                                    $is_checked = in_array($group->ID, $current_groups);
+                                ?>
+                                    <li style="padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
+                                        <label style="display: flex; align-items: center; margin: 0;">
+                                            <input type="checkbox" 
+                                                   name="group_ids[]" 
+                                                   value="<?php echo esc_attr($group->ID); ?>"
+                                                   <?php checked($is_checked); ?>>
+                                            <span style="margin-left: 8px;"><?php echo esc_html($group->post_title); ?></span>
+                                        </label>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php else : ?>
+                            <p style="margin: 0; padding: 10px; color: #666;"><?php _e('No LearnDash groups found.', 'school-manager-lite'); ?></p>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="submit" style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee;">
+                        <button type="submit" class="button button-primary">
+                            <?php _e('Save Changes', 'school-manager-lite'); ?>
+                        </button>
+                        <span class="spinner" style="float: none; margin: 2px 0 0 10px;"></span>
+                    </div>
+                    
+                    <div class="notice-container" style="margin-top: 15px;"></div>
+                </div>
+            </form>
+        </div>
+        
+        <style>
+            .teacher-group-assignment-form .group-checkboxes {
+                background: #fff;
+                border-radius: 3px;
+            }
+            .teacher-group-assignment-form .group-checkboxes ul {
+                margin: 0;
+                padding: 0;
+            }
+            .teacher-group-assignment-form .group-checkboxes li {
+                padding: 8px 12px;
+                margin: 0;
+                border-bottom: 1px solid #f0f0f0;
+                transition: background-color 0.2s;
+            }
+            .teacher-group-assignment-form .group-checkboxes li:hover {
+                background-color: #f9f9f9;
+            }
+            .teacher-group-assignment-form .group-checkboxes li:last-child {
+                border-bottom: none;
+            }
+            .teacher-group-assignment-form label {
+                display: flex;
+                align-items: center;
+                cursor: pointer;
+                margin: 0;
+            }
+            .teacher-group-assignment-form input[type="checkbox"] {
+                margin: 0 8px 0 0;
+            }
+            .notice-container {
+                min-height: 20px;
+            }
+            .notice {
+                margin: 0 0 15px 0 !important;
+            }
+        </style>
+        <?php
+        
+        // Get the output and clean the buffer
+        $html = ob_get_clean();
+        
+        // Send the response
+        wp_send_json_success($html);
+    }
+    
+    /**
+     * AJAX handler to save teacher group assignments
+     */
+    public function ajax_assign_teacher_to_groups() {
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'school_manager_ajax')) {
+            wp_send_json_error(array('message' => __('Security check failed', 'school-manager-lite')));
+            return;
+        }
+        
+        if (!current_user_can('edit_users')) {
+            wp_send_json_error(array('message' => __('Insufficient permissions', 'school-manager-lite')));
+            return;
+        }
+        
+        $teacher_id = isset($_POST['teacher_id']) ? intval($_POST['teacher_id']) : 0;
+        $group_ids = isset($_POST['group_ids']) ? array_map('intval', (array)$_POST['group_ids']) : array();
+        
+        if (!$teacher_id) {
+            wp_send_json_error(array('message' => __('Invalid teacher ID', 'school-manager-lite')));
+            return;
+        }
+        
+        // Get the teacher's current groups
+        $current_groups = learndash_get_administrators_group_ids($teacher_id, true);
+        if (!is_array($current_groups)) {
+            $current_groups = array();
+        }
+        
+        // Groups to remove the teacher from
+        $groups_to_remove = array_diff($current_groups, $group_ids);
+        
+        // Groups to add the teacher to
+        $groups_to_add = array_diff($group_ids, $current_groups);
+        
+        // Remove teacher from groups they should no longer be in
+        foreach ($groups_to_remove as $group_id) {
+            if (function_exists('ld_update_leader_group_access')) {
+                ld_update_leader_group_access($teacher_id, $group_id, false);
+            } else {
+                // Fallback if ld_update_leader_group_access doesn't exist
+                $group_leader_ids = get_post_meta($group_id, '_groups_leaders', true);
+                if (is_array($group_leader_ids)) {
+                    $group_leader_ids = array_diff($group_leader_ids, array($teacher_id));
+                    update_post_meta($group_id, '_groups_leaders', $group_leader_ids);
+                }
+                
+                // Also update user meta
+                $user_group_ids = get_user_meta($teacher_id, 'learndash_group_leaders', true);
+                if (is_array($user_group_ids)) {
+                    $user_group_ids = array_diff($user_group_ids, array($group_id));
+                    update_user_meta($teacher_id, 'learndash_group_leaders', $user_group_ids);
+                }
+            }
+        }
+        
+        // Add teacher to new groups
+        foreach ($groups_to_add as $group_id) {
+            if (function_exists('ld_update_leader_group_access')) {
+                ld_update_leader_group_access($teacher_id, $group_id, true);
+            } else {
+                // Fallback if ld_update_leader_group_access doesn't exist
+                $group_leader_ids = get_post_meta($group_id, '_groups_leaders', true);
+                if (!is_array($group_leader_ids)) {
+                    $group_leader_ids = array();
+                }
+                
+                if (!in_array($teacher_id, $group_leader_ids)) {
+                    $group_leader_ids[] = $teacher_id;
+                    update_post_meta($group_id, '_groups_leaders', $group_leader_ids);
+                }
+                
+                // Also update user meta
+                $user_group_ids = get_user_meta($teacher_id, 'learndash_group_leaders', true);
+                if (!is_array($user_group_ids)) {
+                    $user_group_ids = array();
+                }
+                
+                if (!in_array($group_id, $user_group_ids)) {
+                    $user_group_ids[] = $group_id;
+                    update_user_meta($teacher_id, 'learndash_group_leaders', $user_group_ids);
+                }
+            }
+        }
+        
+        // Clear any LearnDash cache if needed
+        if (function_exists('learndash_clear_group_leader_cache')) {
+            learndash_clear_group_leader_cache($teacher_id);
+        }
+        
+        wp_send_json_success(array(
+            'message' => __('Group assignments updated successfully', 'school-manager-lite'),
+            'teacher_id' => $teacher_id,
+            'group_count' => count($group_ids),
+            'groups_added' => count($groups_to_add),
+            'groups_removed' => count($groups_to_remove)
+        ));
+    }
+    
     public function __construct() {
         // Set up admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
@@ -56,6 +303,8 @@ class School_Manager_Lite_Admin {
         add_action('wp_ajax_bulk_assign_students', array($this, 'ajax_bulk_assign_students'));
         add_action('wp_ajax_assign_promo_to_student', array($this, 'ajax_assign_promo_to_student'));
         add_action('wp_ajax_quick_edit_student', array($this, 'ajax_quick_edit_student'));
+        add_action('wp_ajax_get_teacher_group_assignment_form', array($this, 'ajax_get_teacher_group_assignment_form'));
+        add_action('wp_ajax_assign_teacher_to_groups', array($this, 'ajax_assign_teacher_to_groups'));
         
         // Include required files
         $this->includes();
@@ -86,19 +335,45 @@ class School_Manager_Lite_Admin {
             SCHOOL_MANAGER_LITE_VERSION
         );
         
-        // Enqueue admin scripts
-        wp_enqueue_script(
-            'school-manager-admin',
-            SCHOOL_MANAGER_LITE_URL . 'assets/js/admin.js',
-            array('jquery'),
-            SCHOOL_MANAGER_LITE_VERSION,
-            true
-        );
-        
         // Enqueue Thickbox for teachers page modal functionality
         if (isset($_GET['page']) && $_GET['page'] === 'school-manager-teachers') {
             wp_enqueue_script('thickbox');
             wp_enqueue_style('thickbox');
+            
+            // Enqueue admin scripts with dependencies
+            wp_enqueue_script(
+                'school-manager-admin',
+                SCHOOL_MANAGER_LITE_URL . 'assets/js/admin.js',
+                array('jquery', 'thickbox'),
+                SCHOOL_MANAGER_LITE_VERSION,
+                true
+            );
+            
+            // Localize the script with required data
+            wp_localize_script(
+                'school-manager-admin',
+                'schoolManagerLite',
+                array(
+                    'ajax_url' => admin_url('admin-ajax.php'),
+                    'nonce' => wp_create_nonce('school_manager_ajax'),
+                    'i18n' => array(
+                        'assignGroups' => __('Assign Groups', 'school-manager-lite'),
+                        'assignGroupsTo' => __('Assign Groups To', 'school-manager-lite'),
+                        'saving' => __('Saving...', 'school-manager-lite'),
+                        'saved' => __('Saved!', 'school-manager-lite'),
+                        'error' => __('Error', 'school-manager-lite')
+                    )
+                )
+            );
+        } else {
+            // Enqueue admin scripts without thickbox for other pages
+            wp_enqueue_script(
+                'school-manager-admin',
+                SCHOOL_MANAGER_LITE_URL . 'assets/js/admin.js',
+                array('jquery'),
+                SCHOOL_MANAGER_LITE_VERSION,
+                true
+            );
         }
         
         // Enqueue class list specific scripts

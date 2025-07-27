@@ -172,7 +172,7 @@ class School_Manager_Lite_Wizard_Classes_List_Table extends WP_List_Table {
         
         // Query args for LearnDash groups
         $args = array(
-            'post_type'      => 'groups',
+            'post_type'      => learndash_get_post_type_slug('group'),
             'posts_per_page' => -1,
             'post_status'    => 'publish',
             'orderby'        => 'title',

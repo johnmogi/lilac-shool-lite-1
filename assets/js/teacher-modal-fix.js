@@ -39,43 +39,46 @@ jQuery(document).ready(function($) {
         },
         
         showModal: function(classIds) {
-            if (!classIds || classIds.length === 0) {
-                alert('No classes selected');
+            var modal = $('#teacher-assignment-modal');
+            if (modal.length === 0) {
+                console.error('Teacher assignment modal not found');
                 return;
             }
             
-            // Store class IDs
-            $('#selected-class-ids').val(classIds.join(','));
+            // Store class IDs for later use
+            teacherModal.selectedClassIds = classIds;
             
-            // Update modal text
-            var message = classIds.length === 1 ? 
-                'Assign teacher to 1 class' : 
-                'Assign teacher to ' + classIds.length + ' classes';
-            $('#teacher-assignment-count').text(message);
+            // Update modal content based on number of classes
+            var countText = classIds.length === 1 ? 
+                'שיוך מורה לכיתה אחת' : 
+                'שיוך מורה ל-' + classIds.length + ' כיתות';
+            $('#teacher-assignment-count').text(countText);
             
-            // Show modal
-            $('#teacher-assignment-modal').show();
+            // Show modal with fade effect
+            modal.fadeIn(300);
+            $('body').css('overflow', 'hidden'); // Prevent background scrolling
         },
         
         closeModal: function() {
-            $('#teacher-assignment-modal').hide();
+            $('#teacher-assignment-modal').fadeOut(300);
             $('#teacher-id').val('');
-            $('#selected-class-ids').val('');
+            teacherModal.selectedClassIds = [];
             $('.spinner').removeClass('is-active');
             $('#assign-teacher-submit, #cancel-teacher-assign').prop('disabled', false);
+            $('body').css('overflow', 'auto'); // Restore scrolling
         },
         
         submitAssignment: function() {
             var teacherId = $('#teacher-id').val();
-            var classIds = $('#selected-class-ids').val();
+            var classIds = teacherModal.selectedClassIds;
             
             if (!teacherId) {
-                alert('Please select a teacher');
+                alert('אנא בחר מורה / Please select a teacher');
                 return;
             }
             
-            if (!classIds) {
-                alert('No classes selected');
+            if (!classIds || classIds.length === 0) {
+                alert('לא נבחרו כיתות / No classes selected');
                 return;
             }
             
@@ -83,7 +86,7 @@ jQuery(document).ready(function($) {
             $('.spinner').addClass('is-active');
             $('#assign-teacher-submit, #cancel-teacher-assign').prop('disabled', true);
             
-            var classIdArray = classIds.split(',');
+            var classIdArray = classIds;
             
             if (classIdArray.length === 1) {
                 // Single class assignment
@@ -140,12 +143,16 @@ jQuery(document).ready(function($) {
             this.hideLoading();
             
             if (response.success) {
-                alert(response.data.message || 'Teacher assigned successfully!');
+                var message = response.data.hebrew || response.data.message || 'מורה שויך בהצלחה!';
+                alert(message);
                 this.closeModal();
                 // Reload page to show changes
-                window.location.reload();
+                setTimeout(function() {
+                    window.location.reload();
+                }, 500);
             } else {
-                alert(response.data.message || 'Assignment failed. Please try again.');
+                var errorMessage = response.data.hebrew || response.data.message || 'שיוך המורה נכשל. אנא נסה שוב.';
+                alert(errorMessage);
             }
         },
         
@@ -158,6 +165,30 @@ jQuery(document).ready(function($) {
     // Initialize the modal
     teacherModal.init();
     
+    // Handle bulk assign teacher action
+    $(document).on('submit', 'form', function(e) {
+        var action = $(this).find('select[name="action"]').val();
+        var selectedClasses = $(this).find('input[name="class_id[]"]:checked');
+        
+        if (action === 'bulk_assign_teacher') {
+            e.preventDefault();
+            
+            if (selectedClasses.length === 0) {
+                alert('Please select at least one class to assign a teacher to.');
+                return false;
+            }
+            
+            var classIds = [];
+            selectedClasses.each(function() {
+                classIds.push($(this).val());
+            });
+            
+            // Show the teacher assignment modal
+            teacherModal.showModal(classIds);
+            return false;
+        }
+    });
+    
     // Fix for the problematic button that generates invalid URLs
     $(document).on('click', '.assign-teacher-group', function(e) {
         e.preventDefault();
@@ -169,6 +200,25 @@ jQuery(document).ready(function($) {
         }
         
         return false;
+    });
+    
+    // Modal event handlers
+    $(document).on('click', '.close-teacher-modal, #cancel-teacher-assign', function(e) {
+        e.preventDefault();
+        teacherModal.closeModal();
+    });
+    
+    // Close modal when clicking on background
+    $(document).on('click', '#teacher-assignment-modal', function(e) {
+        if (e.target === this) {
+            teacherModal.closeModal();
+        }
+    });
+    
+    // Submit teacher assignment
+    $(document).on('click', '#assign-teacher-submit', function(e) {
+        e.preventDefault();
+        teacherModal.submitAssignment();
     });
     
     // Fix for thickbox modals that generate invalid URLs

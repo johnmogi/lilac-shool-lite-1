@@ -1,0 +1,81 @@
+/**
+ * Instructor Dashboard Styles
+ */
+
+/* Teacher Group Assignment Modal */
+.teacher-group-assignment {
+    padding: 20px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.teacher-group-assignment h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.teacher-group-assignment .group-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 15px 0;
+    padding: 0 10px;
+}
+
+.teacher-group-assignment .group-item {
+    margin: 8px 0;
+    padding: 8px;
+    background: #f9f9f9;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+}
+
+.teacher-group-assignment .group-item label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.teacher-group-assignment .group-item input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+.teacher-group-assignment .button-container {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #ddd;
+}
+
+.teacher-group-assignment .message-container {
+    margin: 15px 0;
+    padding: 10px 15px;
+    border-radius: 4px;
+}
+
+.teacher-group-assignment .message-container.error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.teacher-group-assignment .message-container.success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+/* Loading state */
+.teacher-group-assignment .loading {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
+
+.teacher-group-assignment .spinner {
+    float: none;
+    margin: 0 0 0 10px;
+    visibility: visible;
+}

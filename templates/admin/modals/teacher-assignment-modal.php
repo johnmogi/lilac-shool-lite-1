@@ -15,11 +15,11 @@ $teacher_manager = School_Manager_Lite_Teacher_Manager::instance();
 $teachers = $teacher_manager->get_teachers();
 ?>
 
-<div id="teacher-assignment-modal" class="modal" style="display: none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <span class="close-teacher-modal dashicons dashicons-no-alt"></span>
-            <h3><?php _e('Assign Teacher to Classes', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">שייך מורה לכיתות</span></h3>
+<div id="teacher-assignment-modal" style="display: none; position: fixed; z-index: 999999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+    <div style="background-color: #fff; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 500px; max-width: 90%; border-radius: 5px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px;">
+            <h3 style="margin: 0;"><?php _e('Assign Teacher to Classes', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">שייך מורה לכיתות</span></h3>
+            <span class="close-teacher-modal" style="cursor: pointer; font-size: 24px; font-weight: bold; color: #999;">&times;</span>
         </div>
         <div class="modal-body">
             <p id="teacher-assignment-count"></p>
@@ -45,10 +45,9 @@ $teachers = $teacher_manager->get_teachers();
                 </p>
             </div>
         </div>
-        <div class="modal-footer">
-            <span class="spinner"></span>
-            <button type="button" id="cancel-teacher-assign" class="button"><?php _e('Cancel', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">ביטול</span></button>
-            <button type="button" id="save-teacher-assign" class="button button-primary"><?php _e('Save Assignment', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">שמור השתייכות</span></button>
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; text-align: right;">
+            <span class="spinner" style="float: left; margin-top: 5px;"></span>
+            <button type="button" id="cancel-teacher-assign" class="button" style="margin-left: 10px;"><?php _e('Cancel', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">ביטול</span></button>
             <button type="button" id="assign-teacher-submit" class="button button-primary"><?php _e('Assign Teacher', 'school-manager-lite'); ?> / <span lang="he" dir="rtl">שייך מורה</span></button>
         </div>
     </div>

@@ -108,22 +108,32 @@ class School_Manager_Lite_Class_Manager {
     }
 
     /**
-     * Get class by ID
+     * Get class by ID (LearnDash group)
      *
-     * @param int $class_id Class ID
+     * @param int $class_id Class ID (Group ID)
      * @return object|false Class object or false if not found
      */
     public function get_class($class_id) {
-        global $wpdb;
+        $group = get_post($class_id);
         
-        $table_name = $wpdb->prefix . 'school_classes';
+        if (!$group || $group->post_type !== 'groups') {
+            return false;
+        }
         
-        $class = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM {$table_name} WHERE id = %d",
-            $class_id
-        ));
+        // Format as class object
+        $class = new stdClass();
+        $class->id = $group->ID;
+        $class->name = $group->post_title;
+        $class->description = $group->post_content;
+        $class->teacher_id = $group->post_author;
+        $class->created_at = $group->post_date;
         
-        return $class ? $class : false;
+        // Get student count
+        $group_users = function_exists('learndash_get_groups_user_ids') ? 
+            learndash_get_groups_user_ids($group->ID) : array();
+        $class->student_count = is_array($group_users) ? count($group_users) : 0;
+        
+        return $class;
     }
 
     /**
@@ -203,62 +213,69 @@ class School_Manager_Lite_Class_Manager {
     }
 
     /**
-     * Update class
+     * Update class (LearnDash group)
      *
-     * @param int $class_id Class ID
+     * @param int $class_id Class ID (Group ID)
      * @param array $data Class data
      * @return bool|WP_Error True on success, WP_Error on failure
      */
     public function update_class($class_id, $data) {
-        global $wpdb;
-        
         $class = $this->get_class($class_id);
         
         if (!$class) {
             return new WP_Error('invalid_class', __('Invalid class ID', 'school-manager-lite'));
         }
         
-        $update_data = array();
-        $update_format = array();
+        $update_data = array('ID' => $class_id);
         
         if (isset($data['name']) && !empty($data['name'])) {
-            $update_data['name'] = $data['name'];
-            $update_format[] = '%s';
+            $update_data['post_title'] = $data['name'];
         }
         
         if (isset($data['description'])) {
-            $update_data['description'] = $data['description'];
-            $update_format[] = '%s';
+            $update_data['post_content'] = $data['description'];
         }
         
-        if (isset($data['teacher_id']) && !empty($data['teacher_id'])) {
+        if (isset($data['teacher_id'])) {
             // Check if teacher exists and is valid
-            $teacher = get_user_by('id', $data['teacher_id']);
-            if (!$teacher || !in_array('school_teacher', (array) $teacher->roles)) {
-                return new WP_Error('invalid_teacher', __('Invalid teacher ID', 'school-manager-lite'));
+            if (!empty($data['teacher_id'])) {
+                $teacher = get_user_by('id', $data['teacher_id']);
+                $valid_roles = array(
+                    'administrator',
+                    'school_teacher', 
+                    'wdm_instructor',
+                    'instructor',
+                    'wdm_swd_instructor',
+                    'swd_instructor'
+                );
+                $has_valid_role = false;
+                
+                if ($teacher) {
+                    foreach ($valid_roles as $role) {
+                        if (in_array($role, (array) $teacher->roles)) {
+                            $has_valid_role = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!$teacher || !$has_valid_role) {
+                    return new WP_Error('invalid_teacher', __('Invalid teacher ID', 'school-manager-lite'));
+                }
             }
             
-            $update_data['teacher_id'] = $data['teacher_id'];
-            $update_format[] = '%d';
+            $update_data['post_author'] = $data['teacher_id'];
         }
         
-        // If no data to update
-        if (empty($update_data)) {
+        // If only ID is set, no data to update
+        if (count($update_data) === 1) {
             return true;
         }
         
-        $table_name = $wpdb->prefix . 'school_classes';
+        $result = wp_update_post($update_data, true);
         
-        $result = $wpdb->update(
-            $table_name,
-            $update_data,
-            array('id' => $class_id),
-            $update_format,
-            array('%d')
-        );
-        
-        if ($result === false) {
-            return new WP_Error('db_error', __('Could not update class', 'school-manager-lite'));
+        if (is_wp_error($result)) {
+            return $result;
         }
         
         do_action('school_manager_lite_after_update_class', $class_id, $data);
@@ -341,38 +358,43 @@ class School_Manager_Lite_Class_Manager {
             $class_id
         ));
         
-        return (int) $count;
+return (int) $count;
+}
+
+/**
+ * Assign teacher to class (LearnDash group)
+ *
+ * @param int $teacher_id Teacher ID
+ * @param int $class_id Class ID (Group ID)
+ * @return bool|WP_Error True on success, WP_Error on failure
+ */
+public function assign_teacher_to_class($teacher_id, $class_id) {
+    // Validate teacher exists
+    $teacher = get_user_by('ID', $teacher_id);
+    if (!$teacher) {
+        return new WP_Error('invalid_teacher', __('Invalid teacher ID.', 'school-manager-lite'));
     }
 
-    /**
-     * Assign teacher to class
-     *
-     * @param int $teacher_id Teacher ID
-     * @param int $class_id Class ID
-     * @return bool|WP_Error True on success, WP_Error on failure
-     */
-    public function assign_teacher_to_class($teacher_id, $class_id) {
-        // Validate teacher exists
-        $teacher = get_user_by('ID', $teacher_id);
-        if (!$teacher) {
-            return new WP_Error('invalid_teacher', __('Invalid teacher ID.', 'school-manager-lite'));
-        }
-
-        // Validate class exists
-        $class = $this->get_class($class_id);
-        if (!$class) {
-            return new WP_Error('invalid_class', __('Invalid class ID.', 'school-manager-lite'));
-        }
-
-        // Update the class with the new teacher
-        $result = $this->update_class($class_id, array('teacher_id' => $teacher_id));
-        
-        if (is_wp_error($result)) {
-            return $result;
-        }
-
-        return true;
+    // Validate class exists
+    $class = $this->get_class($class_id);
+    if (!$class) {
+        return new WP_Error('invalid_class', __('Invalid class ID.', 'school-manager-lite'));
     }
+
+    // Update the class with the new teacher
+    $result = $this->update_class($class_id, array('teacher_id' => $teacher_id));
+    
+    if (is_wp_error($result)) {
+        return $result;
+    }
+
+    // Set teacher as group leader in LearnDash
+    if (function_exists('ld_update_leader_group_access')) {
+        ld_update_leader_group_access($teacher_id, $class_id);
+    }
+
+    return true;
+}
 }
 
 // Initialize the Class Manager

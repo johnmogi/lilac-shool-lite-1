@@ -171,7 +171,8 @@ class School_Manager_Lite_Classes_List_Table extends WP_List_Table {
      */
     public function get_bulk_actions() {
         $actions = array(
-            'delete' => __('Delete', 'school-manager-lite')
+            'delete' => __('Delete', 'school-manager-lite'),
+            'bulk_assign_teacher' => __('Assign Teacher', 'school-manager-lite') . ' / ' . __('שייך מורה', 'school-manager-lite')
         );
         return $actions;
     }
@@ -206,6 +207,16 @@ class School_Manager_Lite_Classes_List_Table extends WP_List_Table {
                         echo '<div class="notice notice-success is-dismissible"><p>' . 
                             __('Classes deleted successfully.', 'school-manager-lite') . '</p></div>';
                     });
+                }
+                break;
+                
+            case 'bulk_assign_teacher':
+                // This will be handled by JavaScript modal
+                // The actual assignment happens via AJAX
+                if (isset($_POST['class_id']) && is_array($_POST['class_id'])) {
+                    // Store selected class IDs in a transient for the modal to use
+                    $class_ids = array_map('intval', $_POST['class_id']);
+                    set_transient('bulk_assign_classes_' . get_current_user_id(), $class_ids, 300); // 5 minutes
                 }
                 break;
         }

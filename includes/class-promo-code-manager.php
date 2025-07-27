@@ -722,16 +722,20 @@ class School_Manager_Lite_Promo_Code_Manager {
             update_user_meta( $wp_user_id, 'school_student_status', 'active' );
         }
 
-        // Determine LearnDash course ID (fallback 898)
-        $ld_course_id = 898;
+        // Determine LearnDash course ID - prioritize the course_id from shortcode attributes
+        $ld_course_id = 898; // Default fallback
         
-        // Use course_id from student_data if provided (highest priority)
+        // Use course_id from shortcode attributes (highest priority)
         if ( !empty($student_data['course_id']) && intval($student_data['course_id']) > 0 ) {
             $ld_course_id = intval($student_data['course_id']);
+            error_log('School Manager Lite: Using course_id from shortcode: ' . $ld_course_id);
         }
         // Otherwise use class course_id if available
         else if ( $class && isset( $class->course_id ) && $class->course_id ) {
             $ld_course_id = (int) $class->course_id;
+            error_log('School Manager Lite: Using course_id from class: ' . $ld_course_id);
+        } else {
+            error_log('School Manager Lite: Using default course_id: ' . $ld_course_id);
         }
 
         // Enroll in LearnDash – must use the WP user ID
@@ -849,25 +853,58 @@ class School_Manager_Lite_Promo_Code_Manager {
             }
             
             // Step 5: GRANT access ONLY to the TARGET course
-            ld_update_course_access( $wp_user_id, $ld_course_id, /* remove */ false );
+            error_log('School Manager Lite: Granting access to course ' . $ld_course_id . ' for user ' . $wp_user_id);
+            
+            // First, ensure the user is enrolled in the course
+            ld_update_course_access($wp_user_id, $ld_course_id, false);
             
             // Step 6: EXPLICITLY add user to the TARGET course's access list
             $target_course_access = get_post_meta($ld_course_id, 'course_access_list', true);
             if (!is_array($target_course_access)) {
                 $target_course_access = array();
             }
+            
             // Add both integer and string versions to be safe
-            if (!in_array($wp_user_id, $target_course_access)) {
-                $target_course_access[] = $wp_user_id;
+            $user_ids_to_add = array(
+                $wp_user_id,
+                (string)$wp_user_id,
+                strval($wp_user_id)
+            );
+            
+            $access_updated = false;
+            foreach ($user_ids_to_add as $uid) {
+                if (!in_array($uid, $target_course_access, true)) {
+                    $target_course_access[] = $uid;
+                    $access_updated = true;
+                }
             }
-            if (!in_array((string)$wp_user_id, $target_course_access)) {
-                $target_course_access[] = (string)$wp_user_id;
+            
+            if ($access_updated) {
+                update_post_meta($ld_course_id, 'course_access_list', array_unique($target_course_access));
+                error_log('School Manager Lite: Updated course access list for course ' . $ld_course_id);
             }
-            update_post_meta($ld_course_id, 'course_access_list', $target_course_access);
             
             // Step 7: Set explicit course access meta for target course
-            update_user_meta($wp_user_id, 'course_' . $ld_course_id . '_access_from', time());
-            update_user_meta($wp_user_id, 'learndash_course_' . $ld_course_id . '_access_from', time());
+            $current_time = time();
+            update_user_meta($wp_user_id, 'course_' . $ld_course_id . '_access_from', $current_time);
+            update_user_meta($wp_user_id, 'learndash_course_' . $ld_course_id . '_access_from', $current_time);
+            update_user_meta($wp_user_id, '_sfwd-course_' . $ld_course_id . '_access_from', $current_time);
+            
+            // Ensure course is in the user's course progress
+            $course_progress = get_user_meta($wp_user_id, '_sfwd-course_progress', true);
+            if (empty($course_progress) || !is_array($course_progress)) {
+                $course_progress = array();
+            }
+            if (!isset($course_progress[$ld_course_id])) {
+                $course_progress[$ld_course_id] = array(
+                    'completed' => 0,
+                    'total' => 0,
+                    'lessons' => array(),
+                    'topics' => array()
+                );
+                update_user_meta($wp_user_id, '_sfwd-course_progress', $course_progress);
+                error_log('School Manager Lite: Initialized course progress for course ' . $ld_course_id);
+            }
             
             error_log('School Manager Lite: SUCCESSFULLY granted access ONLY to course ' . $ld_course_id . ' for user ' . $wp_user_id . ' - ALL OTHER COURSES BLOCKED');
             

@@ -23,28 +23,22 @@ class School_Manager_Lite_Import_Export {
      * Constructor
      */
     public function __construct() {
-        error_log('School Manager Lite: Import/Export constructor called');
         add_action('admin_init', array($this, 'handle_import_export_actions'));
         add_action('wp_ajax_export_teachers', array($this, 'ajax_export_teachers'));
         add_action('wp_ajax_nopriv_export_teachers', array($this, 'ajax_export_teachers'));
-        error_log('School Manager Lite: admin_init hook added for Import/Export');
     }
     
     /**
      * AJAX handler for exporting teachers
      */
     public function ajax_export_teachers() {
-        error_log('School Manager Lite: AJAX export_teachers called');
-        
         // Verify nonce
         if (!isset($_GET['nonce']) || !wp_verify_nonce($_GET['nonce'], 'export_teachers_nonce')) {
-            error_log('School Manager Lite: Invalid nonce');
             status_header(403);
             die('Security check failed');
         }
         
         if (!current_user_can('manage_options')) {
-            error_log('School Manager Lite: User does not have permission to export');
             status_header(403);
             die('Unauthorized');
         }
@@ -79,30 +73,22 @@ class School_Manager_Lite_Import_Export {
     }
     
     /**
-     * Handle import/export actions
+     * Handle import and export actions
      */
     public function handle_import_export_actions() {
         if (!current_user_can('manage_options')) {
-            error_log('School Manager Lite: User does not have permission to access export');
             return;
         }
         
-        // Debug log the request
-        error_log('School Manager Lite: handle_import_export_actions called');
-        error_log('School Manager Lite: GET params: ' . print_r($_GET, true));
-        
         // Handle export
         if (isset($_GET['export']) && isset($_GET['page']) && $_GET['page'] === 'school-manager-import-export') {
-            error_log('School Manager Lite: Export action detected');
             $type = sanitize_text_field($_GET['export']);
-            error_log('School Manager Lite: Export type: ' . $type);
             $this->export_data($type);
-            exit(); // Make sure to exit after export
+            exit();
         }
         
         // Handle import
         if (isset($_POST['import_submit']) && isset($_FILES['import_file'])) {
-            error_log('School Manager Lite: Import action detected');
             $this->import_data();
         }
     }
@@ -145,8 +131,8 @@ class School_Manager_Lite_Import_Export {
         $student_manager = School_Manager_Lite_Student_Manager::instance();
         $students = $student_manager->get_students(array('limit' => -1));
         
-        // Headers
-        fputcsv($output, array('ID', 'Name', 'Email', 'Class ID', 'Teacher ID', 'Course ID', 'Registration Date', 'Expiry Date', 'Status'));
+        // Headers (Hebrew)
+        fputcsv($output, array('מזהה', 'שם', 'דוא"ל', 'מזהה כיתה', 'מזהה מורה', 'מזהה קורס', 'תאריך הרשמה', 'תאריך תפוגה', 'סטטוס'));
         
         // Data
         foreach ($students as $student) {
@@ -200,20 +186,20 @@ class School_Manager_Lite_Import_Export {
     private function export_teachers($output) {
         global $wpdb;
         
-        // Headers
+        // Headers (Hebrew)
         $headers = [
-            'ID',
-            'Username',
-            'Email',
-            'First Name',
-            'Last Name',
-            'Class ID',
-            'Class Name',
-            'Phone',
-            'Last Login',
-            'Status',
-            'Roles',
-            'Registration Date'
+            'מזהה',
+            'שם משתמש',
+            'דוא"ל',
+            'שם פרטי',
+            'שם משפחה',
+            'מזהה כיתה',
+            'שם כיתה',
+            'טלפון',
+            'כניסה אחרונה',
+            'סטטוס',
+            'תפקידים',
+            'תאריך הרשמה'
         ];
         
         fputcsv($output, $headers);
@@ -374,20 +360,20 @@ class School_Manager_Lite_Import_Export {
             return;
         }
         
-        $headers = fgetcsv($handle);
+        $results = array('imported' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => array());
         
         switch ($type) {
             case 'students':
-                $this->import_students($handle);
+                $results = $this->import_students($handle);
                 break;
             case 'teachers':
-                $this->import_teachers($handle, $headers);
+                $results = $this->import_teachers($handle, $headers);
                 break;
             case 'classes':
-                $this->import_classes($handle);
+                $results = $this->import_classes($handle);
                 break;
             case 'promo-codes':
-                $this->import_promo_codes($handle);
+                $results = $this->import_promo_codes($handle);
                 break;
         }
         
@@ -396,8 +382,16 @@ class School_Manager_Lite_Import_Export {
             fclose($handle);
         }
         
-        // Redirect back with success message
-        wp_redirect(add_query_arg('imported', '1', $_SERVER['HTTP_REFERER']));
+        // Store results in transient for display
+        set_transient('school_import_results', $results, 300); // 5 minutes
+        
+        // Redirect to results page
+        $redirect_url = add_query_arg(array(
+            'page' => 'school-manager-import-export',
+            'import_completed' => '1'
+        ), admin_url('admin.php'));
+        
+        wp_redirect($redirect_url);
         exit();
     }
     
@@ -495,7 +489,7 @@ class School_Manager_Lite_Import_Export {
      */
     private function import_students($handle) {
         if (!$handle) {
-            return;
+            return array('imported' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => array('File handle is invalid'));
         }
 
         $student_manager = School_Manager_Lite_Student_Manager::instance();
@@ -504,27 +498,38 @@ class School_Manager_Lite_Import_Export {
         $imported = 0;
         $updated  = 0;
         $errors   = array();
+        $total_rows = 0;
         
         // Skip header row
-        fgetcsv($handle);
+        $headers = fgetcsv($handle);
+        error_log('School Manager Import: CSV headers: ' . print_r($headers, true));
         
         while (($row = fgetcsv($handle)) !== false) {
+            $total_rows++;
+            
             if (empty(array_filter($row))) {
+                error_log('School Manager Import: Skipping empty row ' . $total_rows);
                 continue; // skip empty lines
             }
 
             // Expected format: ID, Name, Email, Class ID, Teacher ID, Course ID, Registration Date, Expiry Date, Status
             list($id, $name, $email, $class_id, $teacher_id, $course_id, $registration_date, $expiry_date, $status) = array_pad($row, 9, '');
             
+            error_log('School Manager Import: Processing row ' . $total_rows . ' - Name: ' . $name . ', Email: ' . $email . ', Class ID: ' . $class_id);
+            
             // Basic validation
             if (empty($name)) {
-                $errors[] = sprintf(__('Skipped row - missing name', 'school-manager-lite'));
+                $error_msg = sprintf(__('Row %d: Skipped - missing name', 'school-manager-lite'), $total_rows);
+                $errors[] = $error_msg;
+                error_log('School Manager Import: ' . $error_msg);
                 continue;
             }
             
             // Ensure valid email
             if (empty($email) || !is_email($email)) {
-                $errors[] = sprintf(__('Skipped row - invalid email for student: %s', 'school-manager-lite'), $name);
+                $error_msg = sprintf(__('Row %d: Skipped - invalid email for student: %s', 'school-manager-lite'), $total_rows, $name);
+                $errors[] = $error_msg;
+                error_log('School Manager Import: ' . $error_msg);
                 continue;
             }
             
@@ -539,8 +544,18 @@ class School_Manager_Lite_Import_Export {
             $password = wp_generate_password(8, false);
             
             // Validate class ID
-            if (empty($class_id) || !$class_manager->get_class($class_id)) {
-                $errors[] = sprintf(__('Skipped row - invalid class ID for student: %s', 'school-manager-lite'), $name);
+            if (empty($class_id)) {
+                $error_msg = sprintf(__('Row %d: Skipped - missing class ID for student: %s', 'school-manager-lite'), $total_rows, $name);
+                $errors[] = $error_msg;
+                error_log('School Manager Import: ' . $error_msg);
+                continue;
+            }
+            
+            $class = $class_manager->get_class($class_id);
+            if (!$class) {
+                $error_msg = sprintf(__('Row %d: Skipped - invalid class ID %s for student: %s', 'school-manager-lite'), $total_rows, $class_id, $name);
+                $errors[] = $error_msg;
+                error_log('School Manager Import: ' . $error_msg);
                 continue;
             }
             
@@ -612,34 +627,16 @@ class School_Manager_Lite_Import_Export {
             }
         }
         
-        // Add admin notice with results
-        add_action('admin_notices', function() use ($imported, $updated, $errors) {
-            $message = sprintf(
-                __('Import complete: %d students added, %d students updated.', 'school-manager-lite'),
-                $imported,
-                $updated
-            );
-            
-            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($message) . '</p></div>';
-            
-            if (!empty($errors)) {
-                echo '<div class="notice notice-error is-dismissible"><p>' . 
-                    __('Some students could not be imported:', 'school-manager-lite') . '</p><ul>';
-                foreach ($errors as $error) {
-                    echo '<li>' . esc_html($error) . '</li>';
-                }
-                echo '</ul></div>';
-            }
-        });
-
-        // Redirect with notice
-        $redirect_url = add_query_arg([
-            'page'     => 'school-manager-import-export',
-            'imported' => 1,
-            'added'    => $imported,
-            'updated'  => $updated,
-        ], admin_url('admin.php'));
-        return $redirect_url;
+        // Log final results
+        error_log('School Manager Import: Final results - Total rows: ' . $total_rows . ', Imported: ' . $imported . ', Updated: ' . $updated . ', Errors: ' . count($errors));
+        
+        // Return results array for proper handling
+        return array(
+            'imported' => $imported,
+            'updated' => $updated,
+            'skipped' => 0,
+            'errors' => $errors
+        );
     }
     
     /**

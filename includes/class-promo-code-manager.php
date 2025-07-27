@@ -906,6 +906,9 @@ class School_Manager_Lite_Promo_Code_Manager {
                 error_log('School Manager Lite: Initialized course progress for course ' . $ld_course_id);
             }
             
+            // Step 8: AGGRESSIVE VERIFICATION - Double-check and remove any remaining enrollments
+            $this->verify_and_enforce_single_course_access($wp_user_id, $ld_course_id);
+            
             error_log('School Manager Lite: SUCCESSFULLY granted access ONLY to course ' . $ld_course_id . ' for user ' . $wp_user_id . ' - ALL OTHER COURSES BLOCKED');
             
             // ENHANCED: Final verification - check that ONLY target course access exists
@@ -1127,5 +1130,88 @@ class School_Manager_Lite_Promo_Code_Manager {
         include plugin_dir_path(dirname(__FILE__)) . 'templates/promo-code-form.php';
         
         return ob_get_clean();
+    }
+    
+    /**
+     * Aggressively verify and enforce single course access
+     * This method runs after course enrollment to ensure no other courses are accessible
+     */
+    private function verify_and_enforce_single_course_access($user_id, $target_course_id) {
+        error_log('School Manager Lite: AGGRESSIVE VERIFICATION - Starting single course enforcement for user ' . $user_id . ', target course: ' . $target_course_id);
+        
+        // Get all courses the user is currently enrolled in
+        $enrolled_courses = learndash_user_get_enrolled_courses($user_id);
+        
+        error_log('School Manager Lite: VERIFICATION - User currently enrolled in courses: ' . implode(', ', $enrolled_courses));
+        
+        // Remove enrollment from any course that's not the target
+        $removed_courses = array();
+        foreach ($enrolled_courses as $course_id) {
+            if ($course_id != $target_course_id) {
+                // Aggressively remove access
+                ld_update_course_access($user_id, $course_id, true); // Remove access
+                
+                // Remove from course access list
+                $course_access_list = get_post_meta($course_id, 'course_access_list', true);
+                if (is_array($course_access_list)) {
+                    $course_access_list = array_diff($course_access_list, array($user_id, (string)$user_id));
+                    update_post_meta($course_id, 'course_access_list', $course_access_list);
+                }
+                
+                // Remove all user meta for this course
+                delete_user_meta($user_id, 'course_' . $course_id . '_access_from');
+                delete_user_meta($user_id, 'learndash_course_' . $course_id . '_access_from');
+                delete_user_meta($user_id, '_sfwd-course_' . $course_id . '_access_from');
+                
+                $removed_courses[] = $course_id;
+                error_log('School Manager Lite: VERIFICATION - REMOVED access to unwanted course: ' . $course_id);
+            }
+        }
+        
+        // Clear LearnDash cache to ensure changes take effect immediately
+        if (function_exists('learndash_user_clear_data')) {
+            learndash_user_clear_data($user_id);
+        }
+        
+        // Double-check enrollment after cleanup
+        $final_enrolled_courses = learndash_user_get_enrolled_courses($user_id);
+        error_log('School Manager Lite: VERIFICATION - Final enrolled courses after cleanup: ' . implode(', ', $final_enrolled_courses));
+        
+        // If still enrolled in unwanted courses, use nuclear option
+        $unwanted_courses = array_diff($final_enrolled_courses, array($target_course_id));
+        if (!empty($unwanted_courses)) {
+            error_log('School Manager Lite: VERIFICATION - NUCLEAR OPTION needed for courses: ' . implode(', ', $unwanted_courses));
+            
+            global $wpdb;
+            
+            // Remove from LearnDash user activity table
+            foreach ($unwanted_courses as $course_id) {
+                $wpdb->delete(
+                    $wpdb->prefix . 'learndash_user_activity',
+                    array(
+                        'user_id' => $user_id,
+                        'post_id' => $course_id,
+                        'activity_type' => 'course'
+                    )
+                );
+                
+                error_log('School Manager Lite: VERIFICATION - NUCLEAR - Removed activity records for course: ' . $course_id);
+            }
+            
+            // Clear cache again
+            if (function_exists('learndash_user_clear_data')) {
+                learndash_user_clear_data($user_id);
+            }
+        }
+        
+        // Final verification
+        $absolutely_final_courses = learndash_user_get_enrolled_courses($user_id);
+        if (count($absolutely_final_courses) === 1 && in_array($target_course_id, $absolutely_final_courses)) {
+            error_log('School Manager Lite: VERIFICATION - SUCCESS! User ' . $user_id . ' now has access ONLY to target course ' . $target_course_id);
+        } else {
+            error_log('School Manager Lite: VERIFICATION - WARNING! User ' . $user_id . ' still has unexpected course access: ' . implode(', ', $absolutely_final_courses));
+        }
+        
+        return $removed_courses;
     }
 }

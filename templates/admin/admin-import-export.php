@@ -1,5 +1,11 @@
-<?php if (!defined('ABSPATH')) exit; ?>
+<?php
+if (!defined('ABSPATH')) exit; // Exit if accessed directly
 
+// TEMPLATE LOADING DEBUG - This should appear on the page if template is loading correctly
+// Added: <?php echo date('Y-m-d H:i:s'); ?>
+echo '<div style="background: red; color: white; padding: 10px; font-size: 16px; font-weight: bold; margin: 10px 0;">🔴 TEMPLATE DEBUG: admin-import-export.php loaded at ' . date('Y-m-d H:i:s') . '</div>';
+
+<!-- DEBUG: Template loaded at <?php echo date('Y-m-d H:i:s'); ?> -->
 <div class="wrap school-manager-import-export">
     <h1><?php _e('Import/Export', 'school-manager-lite'); ?></h1>
     
@@ -39,6 +45,73 @@
                                     <?php _e('Upload a CSV file with the correct format.', 'school-manager-lite'); ?>
                                     <a href="#" class="download-sample" data-type="students"><?php _e('Download sample CSV', 'school-manager-lite'); ?></a>
                                 </p>
+                            </td>
+                        </tr>
+                        
+                        <!-- Failsafe Options for Student Import -->
+                        <tr id="student-failsafe-options" style="display: none;">
+                            <td colspan="2">
+                                <hr style="margin: 20px 0; border: 1px solid #ddd;" />
+                                <h3 style="margin: 10px 0; color: #0073aa;"><?php _e('הגדרות ברירת מחדל לייבוא', 'school-manager-lite'); ?></h3>
+                                <p style="color: #666;"><?php _e('הגדרות אלה ישמשו כברירת מחדל עבור תלמידים שחסרים פרטים בקובץ CSV', 'school-manager-lite'); ?></p>
+                                
+                                <table class="form-table" style="margin-top: 15px;">
+                                    <tr>
+                                        <th scope="row">
+                                            <label for="default_teacher_id"><?php _e('בחר מורה ברירת מחדל', 'school-manager-lite'); ?></label>
+                                        </th>
+                                        <td>
+                                            <select name="default_teacher_id" id="default_teacher_id" class="regular-text">
+                                                <option value=""><?php _e('-- בחר מורה (אופציונלי) --', 'school-manager-lite'); ?></option>
+                                                <?php
+                                                // Get teachers for dropdown
+                                                $teachers = get_users(array(
+                                                    'role__in' => array('school_teacher', 'wdm_instructor', 'instructor', 'administrator'),
+                                                    'orderby' => 'display_name',
+                                                    'order' => 'ASC'
+                                                ));
+                                                foreach ($teachers as $teacher) {
+                                                    echo '<option value="' . esc_attr($teacher->ID) . '">' . esc_html($teacher->display_name) . ' (ID: ' . $teacher->ID . ')</option>';
+                                                }
+                                                ?>
+                                            </select>
+                                            <p class="description"><?php _e('מורה זה יוקצה לתלמידים שאין להם מורה מוגדר בקובץ CSV', 'school-manager-lite'); ?></p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">
+                                            <label for="default_course_id"><?php _e('בחר קורס ברירת מחדל', 'school-manager-lite'); ?></label>
+                                        </th>
+                                        <td>
+                                            <select name="default_course_id" id="default_course_id" class="regular-text">
+                                                <?php
+                                                // Get LearnDash courses for dropdown
+                                                $courses = get_posts(array(
+                                                    'post_type' => 'sfwd-courses',
+                                                    'post_status' => 'publish',
+                                                    'numberposts' => -1,
+                                                    'orderby' => 'title',
+                                                    'order' => 'ASC'
+                                                ));
+                                                foreach ($courses as $course) {
+                                                    $selected = ($course->ID == 898) ? ' selected' : '';
+                                                    echo '<option value="' . esc_attr($course->ID) . '"' . $selected . '>' . esc_html($course->post_title) . ' (ID: ' . $course->ID . ')</option>';
+                                                }
+                                                ?>
+                                            </select>
+                                            <p class="description"><?php _e('קורס זה יוקצה לתלמידים שאין להם קורס מוגדר בקובץ CSV', 'school-manager-lite'); ?></p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">
+                                            <label for="default_class_id"><?php _e('מזהה כיתה ברירת מחדל', 'school-manager-lite'); ?></label>
+                                        </th>
+                                        <td>
+                                            <input type="text" name="default_class_id" id="default_class_id" class="regular-text" placeholder="<?php _e('לדוגמה: 1, 2, 3', 'school-manager-lite'); ?>">
+                                            <p class="description"><?php _e('מזהה כיתה זה יוקצה לתלמידים שאין להם כיתה מוגדרת בקובץ CSV', 'school-manager-lite'); ?></p>
+                                        </td>
+                                    </tr>
+                                </table>
                             </td>
                         </tr>
                     </table>
@@ -124,6 +197,87 @@
             var type = $(this).data('type');
             window.location.href = '<?php echo esc_js(admin_url('admin-ajax.php?action=download_sample_csv&type=')); ?>' + type;
         });
+        
+        // Function to toggle failsafe options based on import type
+        function toggleFailsafeOptions() {
+            var importType = $('#import_type').val();
+            var failsafeRow = $('#student-failsafe-options');
+            
+            if (importType === 'students') {
+                failsafeRow.fadeIn();
+            } else {
+                failsafeRow.fadeOut();
+            }
+        }
+        
+        // Initial check on page load
+        toggleFailsafeOptions();
+        
+        // Listen for changes to import type dropdown
+        $('#import_type').on('change', function() {
+            toggleFailsafeOptions();
+        });
+        
+        // Add RTL support for Hebrew text in failsafe options
+        $('#student-failsafe-options').css({
+            'direction': 'rtl',
+            'text-align': 'right'
+        });
+        
+        // Style the failsafe section for better visibility
+        $('#student-failsafe-options h3').css({
+            'font-family': 'Arial, sans-serif',
+            'font-weight': 'bold',
+            'margin-bottom': '10px'
+        });
+        
+        $('#student-failsafe-options .description').css({
+            'font-style': 'italic',
+            'color': '#666',
+            'margin-top': '5px'
+        });
+        
+        // Add visual feedback when failsafe options are shown
+        $('#import_type').on('change', function() {
+            if ($(this).val() === 'students') {
+                $('#student-failsafe-options').addClass('highlight-section');
+                setTimeout(function() {
+                    $('#student-failsafe-options').removeClass('highlight-section');
+                }, 1000);
+            }
+        });
     });
     </script>
+    
+    <style>
+    #student-failsafe-options {
+        background-color: #f9f9f9;
+        border-radius: 5px;
+        padding: 15px;
+        margin-top: 10px;
+    }
+    
+    #student-failsafe-options h3 {
+        color: #0073aa;
+        border-bottom: 2px solid #0073aa;
+        padding-bottom: 5px;
+        margin-bottom: 15px;
+    }
+    
+    #student-failsafe-options .form-table {
+        background-color: white;
+        border-radius: 3px;
+        padding: 10px;
+    }
+    
+    .highlight-section {
+        animation: highlight 1s ease-in-out;
+    }
+    
+    @keyframes highlight {
+        0% { background-color: #f9f9f9; }
+        50% { background-color: #e6f3ff; }
+        100% { background-color: #f9f9f9; }
+    }
+    </style>
 </div>

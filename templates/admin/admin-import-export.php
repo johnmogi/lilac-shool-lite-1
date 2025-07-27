@@ -1,17 +1,12 @@
 <?php
 if (!defined('ABSPATH')) exit; // Exit if accessed directly
-
-// TEMPLATE LOADING DEBUG - This should appear on the page if template is loading correctly
-// Added: <?php echo date('Y-m-d H:i:s'); ?>
-echo '<div style="background: red; color: white; padding: 10px; font-size: 16px; font-weight: bold; margin: 10px 0;">🔴 TEMPLATE DEBUG: admin-import-export.php loaded at ' . date('Y-m-d H:i:s') . '</div>';
-
-<!-- DEBUG: Template loaded at <?php echo date('Y-m-d H:i:s'); ?> -->
+?>
 <div class="wrap school-manager-import-export">
-    <h1><?php _e('Import/Export', 'school-manager-lite'); ?></h1>
+    <h1><?php _e('ייבוא/ייצוא נתונים', 'school-manager-lite'); ?></h1>
     
     <?php if (isset($_GET['imported'])) : ?>
         <div class="notice notice-success">
-            <p><?php _e('Data imported successfully!', 'school-manager-lite'); ?></p>
+            <p><?php _e('הנתונים יובאו בהצלחה!', 'school-manager-lite'); ?></p>
         </div>
     <?php endif; ?>
     

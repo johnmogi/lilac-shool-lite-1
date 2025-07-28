@@ -131,8 +131,8 @@ class School_Manager_Lite_Import_Export {
         $student_manager = School_Manager_Lite_Student_Manager::instance();
         $students = $student_manager->get_students(array('limit' => -1));
         
-        // Headers (Hebrew)
-        fputcsv($output, array('מזהה', 'שם', 'דוא"ל', 'מזהה כיתה', 'מזהה מורה', 'מזהה קורס', 'תאריך הרשמה', 'תאריך תפוגה', 'סטטוס'));
+        // Headers (English - matching import format)
+        fputcsv($output, array('ID', 'Name', 'Email', 'Class ID', 'Teacher ID', 'Course ID', 'Registration Date', 'Expiry Date', 'Status'));
         
         // Data
         foreach ($students as $student) {
